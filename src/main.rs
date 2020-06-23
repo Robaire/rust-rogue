@@ -9,7 +9,73 @@ extern crate image;
 pub mod shader;
 use shader::{Shader, Program};
 
+extern crate specs;
+use specs::prelude::*;
+
+
+struct Position { x: f64, y: f64, z: f64 }
+impl Component for Position {
+    type Storage = VecStorage<Self>;
+}
+
+struct Velocity { x: f64, y: f64, z: f64 }
+impl Component for Velocity {
+    type Storage = VecStorage<Self>;
+}
+
+struct Orientation { x: f64, y: f64, z: f64, w: f64 }
+impl Component for Orientation {
+    type Storage = VecStorage<Self>;
+}
+
+struct Controlled;
+impl Component for Controlled {
+    type Storage = NullStorage<Self>;
+}
+impl Default for Controlled{
+    fn default() -> Controlled {
+       Controlled
+    }
+}
+
+// struct ControlSystem;
+// impl<'a> System<'a> for ControlSystem {
+//     type SystemData = (WriteStorage<'a, Velocity>, ReadStorage<'a, Controlled>);
+
+//     fn run(&mut self, (mut velocity): Self::SystemData) {
+//         for (velocity) in (&mut velocity, )
+
+//     }
+// }
+
+struct PhysicsSystem;
+impl<'a> System<'a> for PhysicsSystem {
+    type SystemData = (WriteStorage<'a, Position>, ReadStorage<'a, Velocity>);
+
+    fn run(&mut self, (mut position, velocity): Self::SystemData) {
+        for (position, velocity) in (&mut position, &velocity).join() {
+            
+            position.x += velocity.x;
+            position.y += velocity.y;
+            position.z += velocity.z;
+        }
+    }
+}
+
 fn main() {
+
+    // ECS Stuff
+    let mut world = World::new();
+    world.register::<Position>();
+    world.register::<Velocity>();
+
+    let player = world.create_entity()
+        .with(Position{x: 0.0, y: 0.0, z: 0.0})
+        .with(Velocity{x: 0.0, y: 0.0, z: 0.0})
+        .build();
+
+    let mut dispatcher = DispatcherBuilder::new().with(PhysicsSystem, "PhysicsSystem", &[]).build();
+    dispatcher.dispatch(&mut world);
     
     // Initialize SDL
     let sdl_context = match sdl2::init() {
@@ -188,6 +254,8 @@ fn main() {
                 Event::KeyDown {keycode: Some(key), ..} => {
                     println!("Key Press: {}", key);
 
+
+
                     let step = 0.03;
 
                     match key {
@@ -244,7 +312,10 @@ fn main() {
             };
         }
 
+        // Update Game State
+        dispatcher.dispatch(&mut world);
         
+        // Draw things
         unsafe { 
             gl::Clear(gl::COLOR_BUFFER_BIT);
             gl::DrawArrays(gl::TRIANGLES, 0, 6); 
