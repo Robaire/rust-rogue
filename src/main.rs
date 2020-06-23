@@ -2,7 +2,7 @@ extern crate gl;
 extern crate sdl2;
 use sdl2::video::GLProfile;
 use sdl2::event::Event;
-use sdl2::keyboard::Keycode;
+use sdl2::keyboard::{Keycode, Scancode};
 
 extern crate image;
 
@@ -11,71 +11,146 @@ use shader::{Shader, Program};
 
 extern crate specs;
 use specs::prelude::*;
+use specs::{Component, VecStorage};
+use specs::WorldExt;
 
-
+#[derive(Component, Debug)]
+#[storage(VecStorage)]
 struct Position { x: f64, y: f64, z: f64 }
-impl Component for Position {
-    type Storage = VecStorage<Self>;
-}
 
+#[derive(Component)]
+#[storage(VecStorage)]
 struct Velocity { x: f64, y: f64, z: f64 }
-impl Component for Velocity {
-    type Storage = VecStorage<Self>;
-}
 
+#[derive(Component)]
+#[storage(VecStorage)]
 struct Orientation { x: f64, y: f64, z: f64, w: f64 }
-impl Component for Orientation {
-    type Storage = VecStorage<Self>;
-}
 
+#[derive(Component, Default)]
+#[storage(NullStorage)]
 struct Controlled;
-impl Component for Controlled {
-    type Storage = NullStorage<Self>;
-}
-impl Default for Controlled{
-    fn default() -> Controlled {
-       Controlled
+
+struct ControlSystem;
+impl<'a> System<'a> for ControlSystem {
+    type SystemData = (WriteStorage<'a, Velocity>, ReadStorage<'a, Controlled>, Read<'a, InputState>);
+
+    fn run(&mut self, (mut velocity, controlled, input_state): Self::SystemData) {
+
+        let up = if input_state.up { 1.0 } else { 0.0 };        
+        let down = if input_state.down { -1.0 } else { 0.0 };        
+
+        let right = if input_state.right { 1.0 } else { 0.0 };        
+        let left = if input_state.left { -1.0 } else { 0.0 };        
+
+        for (velocity, _) in (&mut velocity, &controlled).join() {
+            velocity.x = right + left;
+            velocity.y = up + down;
+        }
     }
 }
 
-// struct ControlSystem;
-// impl<'a> System<'a> for ControlSystem {
-//     type SystemData = (WriteStorage<'a, Velocity>, ReadStorage<'a, Controlled>);
-
-//     fn run(&mut self, (mut velocity): Self::SystemData) {
-//         for (velocity) in (&mut velocity, )
-
-//     }
-// }
-
 struct PhysicsSystem;
 impl<'a> System<'a> for PhysicsSystem {
-    type SystemData = (WriteStorage<'a, Position>, ReadStorage<'a, Velocity>);
+    type SystemData = (WriteStorage<'a, Position>, ReadStorage<'a, Velocity>, Read<'a, DeltaTime>);
 
-    fn run(&mut self, (mut position, velocity): Self::SystemData) {
+    fn run(&mut self, (mut position, velocity, delta): Self::SystemData) {
+
+        let delta = delta.0.as_secs_f64();
+
         for (position, velocity) in (&mut position, &velocity).join() {
             
-            position.x += velocity.x;
-            position.y += velocity.y;
-            position.z += velocity.z;
+            position.x += velocity.x * delta;
+            position.y += velocity.y * delta;
+            position.z += velocity.z * delta;
         }
+    }
+}
+
+struct PositionUpdateSystem;
+impl<'a> System<'a> for PositionUpdateSystem {
+    type SystemData = (ReadStorage<'a, Position>, Write<'a, VertexInformation>);
+
+    fn run(&mut self, (position, mut vi): Self::SystemData) {
+
+        for position in (&position).join() {
+
+            vi.vertices[0] += position.x as f32;
+            vi.vertices[5] += position.x as f32;
+            vi.vertices[10] += position.x as f32;
+            vi.vertices[15] += position.x as f32;
+            vi.vertices[20] += position.x as f32;
+            vi.vertices[25] += position.x as f32;
+
+            vi.vertices[1] += position.y as f32;
+            vi.vertices[6] += position.y as f32;
+            vi.vertices[11] += position.y as f32;
+            vi.vertices[16] += position.y as f32;
+            vi.vertices[21] += position.y as f32;
+            vi.vertices[26] += position.y as f32;
+
+            // println!("Position: {:?}", position);
+        }
+    }
+}
+
+#[derive(Default)]
+struct DeltaTime(std::time::Duration);
+
+#[derive(Default, Debug)]
+struct InputState {
+    pub up: bool,
+    pub down: bool,
+    pub left: bool,
+    pub right: bool,
+    pub action: bool
+}
+impl InputState {
+    fn new() -> InputState {
+        InputState {
+            up: false,
+            down: false,
+            left: false,
+            right: false,
+            action: false
+        }
+    }
+}
+
+#[derive(Default)]
+struct VertexInformation {
+    pub vertices: Vec<f32>
+}
+impl VertexInformation {
+    fn new(vertices: Vec<f32>) -> VertexInformation {
+        VertexInformation { vertices }
     }
 }
 
 fn main() {
 
+    // let input_state = InputState::new();
+
     // ECS Stuff
     let mut world = World::new();
     world.register::<Position>();
     world.register::<Velocity>();
+    world.register::<Controlled>();
+    world.insert(DeltaTime(std::time::Duration::from_nanos(500)));
+    world.insert(InputState::new());
+    world.insert(VertexInformation::new(vec![]));
 
     let player = world.create_entity()
         .with(Position{x: 0.0, y: 0.0, z: 0.0})
         .with(Velocity{x: 0.0, y: 0.0, z: 0.0})
+        .with(Controlled)
         .build();
 
-    let mut dispatcher = DispatcherBuilder::new().with(PhysicsSystem, "PhysicsSystem", &[]).build();
-    dispatcher.dispatch(&mut world);
+    let mut dispatcher = DispatcherBuilder::new()
+    .with(ControlSystem, "ControlSystem", &[])
+    .with(PhysicsSystem, "PhysicsSystem", &["ControlSystem"])
+    .with(PositionUpdateSystem, "PositionUpdater", &["PhysicsSystem"])
+    .build();
+    // dispatcher.dispatch(&mut world);
     
     // Initialize SDL
     let sdl_context = match sdl2::init() {
@@ -94,8 +169,8 @@ fn main() {
     gl_attributes.set_context_profile(GLProfile::Core);
     gl_attributes.set_context_flags().debug().set();
     gl_attributes.set_context_version(3, 3);
-    gl_attributes.set_multisample_buffers(1);
-    gl_attributes.set_multisample_samples(4);
+    // gl_attributes.set_multisample_buffers(1);
+    // gl_attributes.set_multisample_samples(4);
 
     // Create the window
     let window = match video_subsystem
@@ -141,7 +216,7 @@ fn main() {
     shader_program.set_used();
 
     // Create Square
-    let mut vertices: Vec<f32> = vec![
+    let mut square_vertices: Vec<f32> = vec![
         -0.3, -0.3, 0.0, 0.0, 0.0,
         0.3, 0.3, 0.0, 1.0, 1.0,
         -0.3, 0.3, 0.0, 0.0, 1.0,
@@ -149,16 +224,11 @@ fn main() {
         0.3, -0.3, 0.0, 1.0, 0.0,
         0.3, 0.3, 0.0, 1.0, 1.0
     ];
-
-    // Map Texture to Square
-    let uv_coordinates: Vec<f32> = vec![
-        0.0, 1.0,
-        0.0, 0.0,
-        1.0, 0.0,
-        1.0, 1.0,
-        0.0, 1.0,
-        1.0, 0.0
-    ];
+    
+    {
+    let mut vi = world.write_resource::<VertexInformation>();
+    vi.vertices = square_vertices.to_vec();
+    }
 
     // Create a vertex buffer
     let mut vbo = 0;
@@ -169,8 +239,8 @@ fn main() {
         gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
         gl::BufferData(
             gl::ARRAY_BUFFER,
-            (vertices.len() * std::mem::size_of::<f32>()) as gl::types::GLsizeiptr,
-            vertices.as_ptr() as *const gl::types::GLvoid,
+            (square_vertices.len() * std::mem::size_of::<f32>()) as gl::types::GLsizeiptr,
+            square_vertices.as_ptr() as *const gl::types::GLvoid,
             gl::STATIC_DRAW
         );
         gl::BindBuffer(gl::ARRAY_BUFFER, 0);
@@ -202,12 +272,11 @@ fn main() {
 
     // Load the Image
     // TODO: Fix transparency values
-    let image = match image::open("./src/frames/big_zombie_idle_anim_f0.png") {
+    let image = match image::open("./src/frames/ogre_idle_anim_f0.png") {
         Ok(image) => image.flipv().into_rgba(),
         Err(message) => panic!(format!("Image could not be loaded: {}", message))
     };
     
-
     // Create a texture
     let mut texture_id = 0;
     unsafe { gl::GenTextures(1, &mut texture_id); };
@@ -253,11 +322,9 @@ fn main() {
                 Event::Quit {..} => break 'main_loop,
                 Event::KeyDown {keycode: Some(key), ..} => {
                     println!("Key Press: {}", key);
-
-
-
                     let step = 0.03;
 
+                    /*
                     match key {
                         Keycode::W => {
                             vertices[1] += step;
@@ -293,18 +360,19 @@ fn main() {
                         },
                         _ => {}
                     };
+                    */
 
                     // Copy new vertex data into the buffer
-                    unsafe {
-                        gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
-                        gl::BufferData(
-                            gl::ARRAY_BUFFER,
-                            (vertices.len() * std::mem::size_of::<f32>()) as gl::types::GLsizeiptr,
-                            vertices.as_ptr() as *const gl::types::GLvoid,
-                            gl::STATIC_DRAW
-                        );
-                        gl::BindBuffer(gl::ARRAY_BUFFER, 0);
-                    };
+                    // unsafe {
+                    //     gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
+                    //     gl::BufferData(
+                    //         gl::ARRAY_BUFFER,
+                    //         (vertices.len() * std::mem::size_of::<f32>()) as gl::types::GLsizeiptr,
+                    //         vertices.as_ptr() as *const gl::types::GLvoid,
+                    //         gl::STATIC_DRAW
+                    //     );
+                    //     gl::BindBuffer(gl::ARRAY_BUFFER, 0);
+                    // };
                     
                 },
                 Event::MouseButtonDown {mouse_btn: button, x, y, ..} => println!("Button Press: {}, {}, {:?}", x, y, button),
@@ -312,8 +380,35 @@ fn main() {
             };
         }
 
-        // Update Game State
+        // Update Input State
+        // TODO: Add this to a system?
+        {
+        let mut input_state = world.write_resource::<InputState>();
+        input_state.up = event_pump.keyboard_state().is_scancode_pressed(Scancode::W);
+        input_state.down = event_pump.keyboard_state().is_scancode_pressed(Scancode::S);
+        input_state.left = event_pump.keyboard_state().is_scancode_pressed(Scancode::A);
+        input_state.right = event_pump.keyboard_state().is_scancode_pressed(Scancode::D);
+        input_state.action = event_pump.keyboard_state().is_scancode_pressed(Scancode::Space);
+        }
+
+        // Update Game States
         dispatcher.dispatch(&mut world);
+
+        // Update the position of the square
+        // player.read_component::<Position>();
+
+        // Copy new vertex data into the buffer
+        let vertices = &world.read_resource::<VertexInformation>().vertices;
+        unsafe {
+            gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
+            gl::BufferData(
+                gl::ARRAY_BUFFER,
+                (vertices.len() * std::mem::size_of::<f32>()) as gl::types::GLsizeiptr,
+                vertices.as_ptr() as *const gl::types::GLvoid,
+                gl::STATIC_DRAW
+            );
+            gl::BindBuffer(gl::ARRAY_BUFFER, 0);
+        };
         
         // Draw things
         unsafe { 
