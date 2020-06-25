@@ -45,6 +45,10 @@ impl<'a> System<'a> for RenderSystem {
 
     fn run(&mut self, (render, position): Self::SystemData) {
 
+        unsafe{
+            gl::Clear(gl::COLOR_BUFFER_BIT);
+        };
+
         for (render, position) in (&render, &position).join() {
 
             let mut vertices = render.vertices.clone();
@@ -85,7 +89,6 @@ impl<'a> System<'a> for RenderSystem {
                 gl::UseProgram(render.program_id);
                 gl::BindTexture(gl::TEXTURE_2D, render.texture_id);
 
-                gl::Clear(gl::COLOR_BUFFER_BIT);
                 gl::DrawArrays(gl::TRIANGLES, 0, 6);
             };
 
@@ -211,11 +214,11 @@ fn main() {
     world.insert(InputState::new());
     world.insert(VertexInformation::new(vec![]));
 
-    let player = world.create_entity()
-        .with(Position{x: 0.0, y: 0.0, z: 0.0})
-        .with(Velocity{x: 0.0, y: 0.0, z: 0.0})
-        .with(Controlled)
-        .build();
+    // let player = world.create_entity()
+    //     .with(Position{x: 0.0, y: 0.0, z: 0.0})
+    //     .with(Velocity{x: 0.0, y: 0.0, z: 0.0})
+    //     .with(Controlled)
+    //     .build();
 
     let mut dispatcher = DispatcherBuilder::new()
     .with(ControlSystem, "ControlSystem", &[])
@@ -298,18 +301,28 @@ fn main() {
         0.3, 0.3, 0.0, 1.0, 1.0
     ];
     
+    // Create Square
+    let small_square_vertices: Vec<f32> = vec![
+        -0.1, -0.1, 0.0, 0.0, 0.0,
+        0.1, 0.1, 0.0, 1.0, 1.0,
+        -0.1, 0.1, 0.0, 0.0, 1.0,
+        -0.1, -0.1, 0.0, 0.0, 0.0,
+        0.1, -0.1, 0.0, 1.0, 0.0,
+        0.1, 0.1, 0.0, 1.0, 1.0
+    ];
+
     {
     let mut vi = world.write_resource::<VertexInformation>();
     vi.vertices = square_vertices.to_vec();
     }
 
     // Create a vertex buffer
-    let mut vbo = 0;
-    unsafe { gl::GenBuffers(1, &mut vbo); };
+    let mut square_vbo = 0;
+    unsafe { gl::GenBuffers(1, &mut square_vbo); };
 
     // Copy Vertex Data into the buffer
     unsafe {
-        gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
+        gl::BindBuffer(gl::ARRAY_BUFFER, square_vbo);
         gl::BufferData(
             gl::ARRAY_BUFFER,
             (square_vertices.len() * std::mem::size_of::<f32>()) as gl::types::GLsizeiptr,
@@ -324,7 +337,7 @@ fn main() {
     unsafe { gl::GenVertexArrays(1, &mut vao); };
     unsafe { 
         gl::BindVertexArray(vao);
-        gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
+        gl::BindBuffer(gl::ARRAY_BUFFER, square_vbo);
 
         gl::EnableVertexAttribArray(0);
         gl::EnableVertexAttribArray(1);
@@ -367,6 +380,30 @@ fn main() {
         gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as i32);
     };
 
+    // Load the Image
+    // TODO: Fix transparency values
+    let image = match image::open("./src/frames/chest_empty_open_anim_f0.png") {
+        Ok(image) => image.flipv().into_rgba(),
+        Err(message) => panic!(format!("Image could not be loaded: {}", message))
+    };
+    
+    // Create a texture
+    let mut texture_id_2 = 0;
+    unsafe { gl::GenTextures(1, &mut texture_id_2); };
+    
+    // Give the texture image data
+    unsafe {
+        gl::BindTexture(gl::TEXTURE_2D, texture_id_2);
+        gl::TexImage2D(
+            gl::TEXTURE_2D, 0, gl::RGB as i32, 
+            image.width() as i32, 
+            image.height() as i32, 
+            0, gl::RGBA, gl::UNSIGNED_BYTE,
+            image.into_raw().as_ptr() as *const gl::types::GLvoid);
+        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
+        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as i32);
+    };
+
     // Last Bit
     unsafe {
 
@@ -374,19 +411,30 @@ fn main() {
         gl::Enable(gl::BLEND);
 
         gl::ClearColor(0.3, 0.3, 0.5, 1.0);
-        gl::Clear(gl::COLOR_BUFFER_BIT);
-        gl::DrawArrays(gl::TRIANGLES, 0, 6);
+        // gl::Clear(gl::COLOR_BUFFER_BIT);
+        // gl::DrawArrays(gl::TRIANGLES, 0, 6);
     };
 
-    let second_player = world.create_entity()
+    let player = world.create_entity()
         .with(Position{x: 0.0, y: 0.0, z: 0.0})
         .with(Velocity{x: 0.0, y: 0.0, z: 0.0})
         .with(Controlled)
         .with(Render{
             program_id: shader_program.id,
             texture_id: texture_id,
-            vertex_buffer: vbo,
+            vertex_buffer: square_vbo,
             vertices: square_vertices.clone()
+        })
+        .build();
+
+
+    let item = world.create_entity()
+        .with(Position{x: -0.5, y: 0.0, z: 0.0})
+        .with(Render{
+            program_id: shader_program.id,
+            texture_id: texture_id_2,
+            vertex_buffer: square_vbo,
+            vertices: small_square_vertices.clone()
         })
         .build();
 
@@ -398,22 +446,7 @@ fn main() {
         for event in event_pump.poll_iter() {
             match event {
                 Event::Quit {..} => break 'main_loop,
-                Event::KeyDown {keycode: Some(key), ..} => {
-                    println!("Key Press: {}", key);
-
-                    // Copy new vertex data into the buffer
-                    // unsafe {
-                    //     gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
-                    //     gl::BufferData(
-                    //         gl::ARRAY_BUFFER,
-                    //         (vertices.len() * std::mem::size_of::<f32>()) as gl::types::GLsizeiptr,
-                    //         vertices.as_ptr() as *const gl::types::GLvoid,
-                    //         gl::STATIC_DRAW
-                    //     );
-                    //     gl::BindBuffer(gl::ARRAY_BUFFER, 0);
-                    // };
-                    
-                },
+                Event::KeyDown {keycode: Some(key), ..} => {},
                 Event::MouseButtonDown {mouse_btn: button, x, y, ..} => println!("Button Press: {}, {}, {:?}", x, y, button),
                 _ => {}
             };
