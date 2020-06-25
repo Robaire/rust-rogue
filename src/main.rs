@@ -72,21 +72,30 @@ impl<'a> System<'a> for PositionUpdateSystem {
 
     fn run(&mut self, (position, mut vi): Self::SystemData) {
 
+        let vertices: Vec<f32> = vec![
+            -0.3, -0.3, 0.0, 0.0, 0.0,
+            0.3, 0.3, 0.0, 1.0, 1.0,
+            -0.3, 0.3, 0.0, 0.0, 1.0,
+            -0.3, -0.3, 0.0, 0.0, 0.0,
+            0.3, -0.3, 0.0, 1.0, 0.0,
+            0.3, 0.3, 0.0, 1.0, 1.0
+        ];
+
         for position in (&position).join() {
 
-            vi.vertices[0] += position.x as f32;
-            vi.vertices[5] += position.x as f32;
-            vi.vertices[10] += position.x as f32;
-            vi.vertices[15] += position.x as f32;
-            vi.vertices[20] += position.x as f32;
-            vi.vertices[25] += position.x as f32;
+            vi.vertices[0] = vertices[0] + position.x as f32;
+            vi.vertices[5] = vertices[5] + position.x as f32;
+            vi.vertices[10] = vertices[10] + position.x as f32;
+            vi.vertices[15] = vertices[15] + position.x as f32;
+            vi.vertices[20] = vertices[20] + position.x as f32;
+            vi.vertices[25] = vertices[25] + position.x as f32;
 
-            vi.vertices[1] += position.y as f32;
-            vi.vertices[6] += position.y as f32;
-            vi.vertices[11] += position.y as f32;
-            vi.vertices[16] += position.y as f32;
-            vi.vertices[21] += position.y as f32;
-            vi.vertices[26] += position.y as f32;
+            vi.vertices[1] = vertices[1] + position.y as f32;
+            vi.vertices[6] = vertices[6] + position.y as f32;
+            vi.vertices[11] = vertices[11] + position.y as f32;
+            vi.vertices[16] = vertices[16] + position.y as f32;
+            vi.vertices[21] = vertices[21] + position.y as f32;
+            vi.vertices[26] = vertices[26] + position.y as f32;
 
             // println!("Position: {:?}", position);
         }
@@ -135,7 +144,7 @@ fn main() {
     world.register::<Position>();
     world.register::<Velocity>();
     world.register::<Controlled>();
-    world.insert(DeltaTime(std::time::Duration::from_nanos(500)));
+    world.insert(DeltaTime(std::time::Duration::from_micros(500)));
     world.insert(InputState::new());
     world.insert(VertexInformation::new(vec![]));
 
