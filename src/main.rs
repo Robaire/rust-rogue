@@ -30,6 +30,70 @@ struct Orientation { x: f64, y: f64, z: f64, w: f64 }
 #[storage(NullStorage)]
 struct Controlled;
 
+#[derive(Component)]
+#[storage(VecStorage)]
+struct Render {
+    program_id: u32,
+    texture_id: u32,
+    vertex_buffer: u32,
+    vertices: Vec<f32>
+}
+
+struct RenderSystem;
+impl<'a> System<'a> for RenderSystem {
+    type SystemData = (ReadStorage<'a, Render>, ReadStorage<'a, Position>);
+
+    fn run(&mut self, (render, position): Self::SystemData) {
+
+        for (render, position) in (&render, &position).join() {
+
+            let mut vertices = render.vertices.clone();
+
+            vertices[0] += position.x as f32;
+            vertices[1] += position.y as f32;
+
+            vertices[5] += position.x as f32;
+            vertices[6] += position.y as f32;
+
+            vertices[10] += position.x as f32;
+            vertices[11] += position.y as f32;
+
+            vertices[15] += position.x as f32;
+            vertices[16] += position.y as f32;
+
+            vertices[20] += position.x as f32;
+            vertices[21] += position.y as f32;
+
+            vertices[25] += position.x as f32;
+            vertices[26] += position.y as f32;
+
+            // println!("{}, {}, {}", render.vertex_buffer, render.program_id, render.texture_id);
+
+            // Prepare the GPU
+            unsafe {
+
+                //gl::BindBuffer(gl::ARRAY_BUFFER, render.vertex_buffer as GL);
+                gl::BindBuffer(gl::ARRAY_BUFFER, render.vertex_buffer);
+                gl::BufferData(
+                    gl::ARRAY_BUFFER,
+                    (vertices.len() * std::mem::size_of::<f32>()) as gl::types::GLsizeiptr,
+                    vertices.as_ptr() as *const gl::types::GLvoid,
+                    gl::STATIC_DRAW
+                );
+                gl::BindBuffer(gl::ARRAY_BUFFER, 0);
+
+                gl::UseProgram(render.program_id);
+                gl::BindTexture(gl::TEXTURE_2D, render.texture_id);
+
+                gl::Clear(gl::COLOR_BUFFER_BIT);
+                gl::DrawArrays(gl::TRIANGLES, 0, 6);
+            };
+
+        }
+
+    }
+}
+
 struct ControlSystem;
 impl<'a> System<'a> for ControlSystem {
     type SystemData = (WriteStorage<'a, Velocity>, ReadStorage<'a, Controlled>, Read<'a, InputState>);
@@ -137,13 +201,12 @@ impl VertexInformation {
 
 fn main() {
 
-    // let input_state = InputState::new();
-
     // ECS Stuff
     let mut world = World::new();
     world.register::<Position>();
     world.register::<Velocity>();
     world.register::<Controlled>();
+    world.register::<Render>();
     world.insert(DeltaTime(std::time::Duration::from_micros(500)));
     world.insert(InputState::new());
     world.insert(VertexInformation::new(vec![]));
@@ -157,9 +220,10 @@ fn main() {
     let mut dispatcher = DispatcherBuilder::new()
     .with(ControlSystem, "ControlSystem", &[])
     .with(PhysicsSystem, "PhysicsSystem", &["ControlSystem"])
-    .with(PositionUpdateSystem, "PositionUpdater", &["PhysicsSystem"])
+    // .with(PositionUpdateSystem, "PositionUpdater", &["PhysicsSystem"])
+    // .with(RenderSystem, "RenderSystem", &["PhysicsSystem"])
+    .with_thread_local(RenderSystem)
     .build();
-    // dispatcher.dispatch(&mut world);
     
     // Initialize SDL
     let sdl_context = match sdl2::init() {
@@ -225,7 +289,7 @@ fn main() {
     shader_program.set_used();
 
     // Create Square
-    let mut square_vertices: Vec<f32> = vec![
+    let square_vertices: Vec<f32> = vec![
         -0.3, -0.3, 0.0, 0.0, 0.0,
         0.3, 0.3, 0.0, 1.0, 1.0,
         -0.3, 0.3, 0.0, 0.0, 1.0,
@@ -302,11 +366,6 @@ fn main() {
         gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
         gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as i32);
     };
-    
-    let err = unsafe { gl::GetError() };
-    println!("{}", err);
-
-    println!("Last Bit");
 
     // Last Bit
     unsafe {
@@ -319,7 +378,17 @@ fn main() {
         gl::DrawArrays(gl::TRIANGLES, 0, 6);
     };
 
-    println!("Enter loop");
+    let second_player = world.create_entity()
+        .with(Position{x: 0.0, y: 0.0, z: 0.0})
+        .with(Velocity{x: 0.0, y: 0.0, z: 0.0})
+        .with(Controlled)
+        .with(Render{
+            program_id: shader_program.id,
+            texture_id: texture_id,
+            vertex_buffer: vbo,
+            vertices: square_vertices.clone()
+        })
+        .build();
 
     // Enter the main event loop
     let mut event_pump = sdl_context.event_pump().unwrap();
@@ -331,45 +400,6 @@ fn main() {
                 Event::Quit {..} => break 'main_loop,
                 Event::KeyDown {keycode: Some(key), ..} => {
                     println!("Key Press: {}", key);
-                    let step = 0.03;
-
-                    /*
-                    match key {
-                        Keycode::W => {
-                            vertices[1] += step;
-                            vertices[6] += step;
-                            vertices[11] += step;
-                            vertices[16] += step;
-                            vertices[21] += step;
-                            vertices[26] += step;
-                        },
-                        Keycode::A => {
-                            vertices[0] -= step;
-                            vertices[5] -= step;
-                            vertices[10] -= step;
-                            vertices[15] -= step;
-                            vertices[20] -= step;
-                            vertices[25] -= step;
-                        },
-                        Keycode::S => {
-                            vertices[1] -= step;
-                            vertices[6] -= step;
-                            vertices[11] -= step;
-                            vertices[16] -= step;
-                            vertices[21] -= step;
-                            vertices[26] -= step;
-                        },
-                        Keycode::D => {
-                            vertices[0] += step;
-                            vertices[5] += step;
-                            vertices[10] += step;
-                            vertices[15] += step;
-                            vertices[20] += step;
-                            vertices[25] += step;
-                        },
-                        _ => {}
-                    };
-                    */
 
                     // Copy new vertex data into the buffer
                     // unsafe {
@@ -402,28 +432,6 @@ fn main() {
 
         // Update Game States
         dispatcher.dispatch(&mut world);
-
-        // Update the position of the square
-        // player.read_component::<Position>();
-
-        // Copy new vertex data into the buffer
-        let vertices = &world.read_resource::<VertexInformation>().vertices;
-        unsafe {
-            gl::BindBuffer(gl::ARRAY_BUFFER, vbo);
-            gl::BufferData(
-                gl::ARRAY_BUFFER,
-                (vertices.len() * std::mem::size_of::<f32>()) as gl::types::GLsizeiptr,
-                vertices.as_ptr() as *const gl::types::GLvoid,
-                gl::STATIC_DRAW
-            );
-            gl::BindBuffer(gl::ARRAY_BUFFER, 0);
-        };
-        
-        // Draw things
-        unsafe { 
-            gl::Clear(gl::COLOR_BUFFER_BIT);
-            gl::DrawArrays(gl::TRIANGLES, 0, 6); 
-        };
 
         // Swap the buffers
         window.gl_swap_window();
