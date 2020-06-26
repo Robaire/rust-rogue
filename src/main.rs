@@ -22,10 +22,6 @@ struct Position { x: f64, y: f64, z: f64 }
 #[storage(VecStorage)]
 struct Velocity { x: f64, y: f64, z: f64 }
 
-#[derive(Component)]
-#[storage(VecStorage)]
-struct Orientation { x: f64, y: f64, z: f64, w: f64 }
-
 #[derive(Component, Default)]
 #[storage(NullStorage)]
 struct Controlled;
@@ -97,6 +93,20 @@ impl<'a> System<'a> for RenderSystem {
     }
 }
 
+struct TimeSystem;
+impl<'a> System<'a> for TimeSystem {
+    type SystemData = Write<'a, DeltaTime>;
+
+    fn run(&mut self, mut delta_time: Self::SystemData) {
+
+        let now = std::time::Instant::now();
+        delta_time.delta = now - delta_time.last;
+        delta_time.last = now;
+        
+    }
+
+}
+
 struct ControlSystem;
 impl<'a> System<'a> for ControlSystem {
     type SystemData = (WriteStorage<'a, Velocity>, ReadStorage<'a, Controlled>, Read<'a, InputState>);
@@ -120,9 +130,9 @@ struct PhysicsSystem;
 impl<'a> System<'a> for PhysicsSystem {
     type SystemData = (WriteStorage<'a, Position>, ReadStorage<'a, Velocity>, Read<'a, DeltaTime>);
 
-    fn run(&mut self, (mut position, velocity, delta): Self::SystemData) {
+    fn run(&mut self, (mut position, velocity, delta_time): Self::SystemData) {
 
-        let delta = delta.0.as_secs_f64();
+        let delta = delta_time.delta.as_secs_f64();
 
         for (position, velocity) in (&mut position, &velocity).join() {
             
@@ -169,8 +179,15 @@ impl<'a> System<'a> for PositionUpdateSystem {
     }
 }
 
-#[derive(Default)]
-struct DeltaTime(std::time::Duration);
+struct DeltaTime {
+    last: std::time::Instant,
+    delta: std::time::Duration
+}
+impl Default for DeltaTime {
+    fn default() -> DeltaTime {
+        DeltaTime{ last: std::time::Instant::now(), delta: std::time::Duration::new(0, 0) }
+    }
+}
 
 #[derive(Default, Debug)]
 struct InputState {
@@ -210,18 +227,16 @@ fn main() {
     world.register::<Velocity>();
     world.register::<Controlled>();
     world.register::<Render>();
-    world.insert(DeltaTime(std::time::Duration::from_micros(500)));
+    world.insert(DeltaTime{
+        last: std::time::Instant::now(),
+        delta: std::time::Duration::from_secs(0)
+    });
     world.insert(InputState::new());
     world.insert(VertexInformation::new(vec![]));
 
-    // let player = world.create_entity()
-    //     .with(Position{x: 0.0, y: 0.0, z: 0.0})
-    //     .with(Velocity{x: 0.0, y: 0.0, z: 0.0})
-    //     .with(Controlled)
-    //     .build();
-
     let mut dispatcher = DispatcherBuilder::new()
-    .with(ControlSystem, "ControlSystem", &[])
+    .with(TimeSystem, "TimeSystem", &[])
+    .with(ControlSystem, "ControlSystem", &["TimeSystem"])
     .with(PhysicsSystem, "PhysicsSystem", &["ControlSystem"])
     // .with(PositionUpdateSystem, "PositionUpdater", &["PhysicsSystem"])
     // .with(RenderSystem, "RenderSystem", &["PhysicsSystem"])
@@ -426,7 +441,6 @@ fn main() {
             vertices: square_vertices.clone()
         })
         .build();
-
 
     let item = world.create_entity()
         .with(Position{x: -0.5, y: 0.0, z: 0.0})
