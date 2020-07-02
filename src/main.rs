@@ -1,7 +1,7 @@
 extern crate gl;
 extern crate sdl2;
 use sdl2::video::GLProfile;
-use sdl2::event::Event;
+use sdl2::event::{Event, WindowEvent};
 use sdl2::keyboard::Scancode;
 
 extern crate image;
@@ -245,9 +245,13 @@ fn main() {
         // Clear the event queue
         for event in event_pump.poll_iter() {
             match event {
-                Event::Quit {..} => break 'main_loop,
                 Event::KeyDown {keycode: Some(key), ..} => {},
                 Event::MouseButtonDown {mouse_btn: button, x, y, ..} => println!("Button Press: {}, {}, {:?}", x, y, button),
+                Event::Window {win_event, ..} => match win_event {
+                    WindowEvent::Resized(x, y) => unsafe { gl::Viewport(0, 0, x, y); },
+                    _ => {}
+                },
+                Event::Quit {..} => break 'main_loop,
                 _ => {}
             };
         }
