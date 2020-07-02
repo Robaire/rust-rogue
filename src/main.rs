@@ -2,7 +2,7 @@ extern crate gl;
 extern crate sdl2;
 use sdl2::video::GLProfile;
 use sdl2::event::Event;
-use sdl2::keyboard::{Keycode, Scancode};
+use sdl2::keyboard::Scancode;
 
 extern crate image;
 
@@ -260,8 +260,6 @@ fn main() {
     gl_attributes.set_context_profile(GLProfile::Core);
     gl_attributes.set_context_flags().debug().set();
     gl_attributes.set_context_version(3, 3);
-    // gl_attributes.set_multisample_buffers(1);
-    // gl_attributes.set_multisample_samples(4);
 
     // Create the window
     let window = match video_subsystem
@@ -285,6 +283,8 @@ fn main() {
 
     // Load the OpenGL Functions
     let gl = gl::load_with(|s| video_subsystem.gl_get_proc_address(s) as *const std::ffi::c_void);
+
+    unsafe{ gl::Enable(gl::CULL_FACE); };
 
     // Load shaders
     let vertex_shader = match Shader::new_from_file("./src/shaders/vertex.vert", gl::VERTEX_SHADER) {
