@@ -18,24 +18,8 @@ extern crate specs;
 use specs::prelude::*;
 use specs::WorldExt;
 
-fn main() {
+fn init_sdl() -> (sdl2::Sdl, sdl2::video::Window, sdl2::video::GLContext) {
 
-    // ECS Stuff
-    let mut world = World::new();
-    world.register::<Position>();
-    world.register::<Velocity>();
-    world.register::<Controlled>();
-    world.register::<Render>();
-    world.insert(DeltaTime::default());
-    world.insert(InputState::new());
-
-    let mut dispatcher = DispatcherBuilder::new()
-    .with(TimeSystem, "TimeSystem", &[])
-    .with(ControlSystem, "ControlSystem", &["TimeSystem"])
-    .with(PhysicsSystem, "PhysicsSystem", &["ControlSystem"])
-    .with_thread_local(RenderSystem)
-    .build();
-    
     // Initialize SDL
     let sdl_context = match sdl2::init() {
         Ok(context) => context,
@@ -65,19 +49,55 @@ fn main() {
             Err(message) => panic!(format!("Failed to create window: {}", message))
         };
 
-    assert_eq!(gl_attributes.context_profile(), GLProfile::Core);
-    assert_eq!(gl_attributes.context_version(), (3, 3));
-
     // Create the OpenGL Context
-    let _gl_context = match window.gl_create_context() {
+    let gl_context  = match window.gl_create_context() {
         Ok(context) => context,
         Err(message) => panic!(format!("Failed to create OpenGL Context: {}", message))
     };
 
     // Load the OpenGL Functions
-    let _gl = gl::load_with(|s| video_subsystem.gl_get_proc_address(s) as *const std::ffi::c_void);
+    gl::load_with(|s| video_subsystem.gl_get_proc_address(s) as *const std::ffi::c_void);
 
-    unsafe{ gl::Enable(gl::CULL_FACE); };
+    (sdl_context, window, gl_context)
+}
+
+fn setup_ecs<'a>() -> (specs::World, specs::Dispatcher<'a, 'a>) {
+     
+    // Create the world
+     let mut world = World::new();
+
+     // Register Components
+     world.register::<Position>();
+     world.register::<Velocity>();
+     world.register::<Controlled>();
+     world.register::<Render>();
+
+     // Insert Resources
+     world.insert(DeltaTime::default());
+     world.insert(InputState::new());
+ 
+     // Create the dispatcher
+     let dispatcher = DispatcherBuilder::new()
+
+     // Add parallel systems
+     .with(TimeSystem, "TimeSystem", &[])
+     .with(ControlSystem, "ControlSystem", &["TimeSystem"])
+     .with(PhysicsSystem, "PhysicsSystem", &["ControlSystem"])
+
+     // Add serial systems
+     .with_thread_local(RenderSystem)
+     .build();  
+
+     (world, dispatcher)
+}
+
+fn main() {
+
+    // Initialize SDL and create a window
+    let (sdl_context, window, _gl_context) = init_sdl();
+
+    // Setup the ECS
+    let (mut world, mut dispatcher) = setup_ecs();
 
     // Load shaders
     let vertex_shader = match Shader::new_from_file("./src/shaders/vertex.vert", gl::VERTEX_SHADER) {
@@ -209,14 +229,16 @@ fn main() {
 
     // Last Bit
     unsafe {
-
         gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
         gl::Enable(gl::BLEND);
+
+        gl::Enable(gl::CULL_FACE);
 
         gl::ClearColor(0.3, 0.3, 0.5, 1.0);
         gl::Clear(gl::COLOR_BUFFER_BIT);
     };
 
+    // Create entities in the world
     let player = world.create_entity()
         .with(Position::new())
         .with(Velocity::new())
@@ -257,7 +279,6 @@ fn main() {
         }
 
         // Update Input State
-        // TODO: Add this to a system?
         {
         let mut input_state = world.write_resource::<InputState>();
         input_state.up = event_pump.keyboard_state().is_scancode_pressed(Scancode::W);
