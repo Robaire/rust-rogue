@@ -5,11 +5,21 @@ use specs::{Component, VecStorage};
 // Components
 #[derive(Component, Debug)]
 #[storage(VecStorage)]
-pub struct Position { pub x: f64, pub y: f64, pub z: f64 }
+pub struct Position { x: f64, y: f64, z: f64 }
+impl Position {
+    pub fn new() -> Position {
+        Position{ x: 0.0, y: 0.0, z: 0.0 }
+    }
+}
 
 #[derive(Component)]
 #[storage(VecStorage)]
-pub struct Velocity { pub x: f64, pub y: f64, pub z: f64 }
+pub struct Velocity { x: f64, y: f64, z: f64 }
+impl Velocity {
+    pub fn new() -> Velocity {
+        Velocity{ x: 0.0, y: 0.0, z: 0.0 }
+    }
+}
 
 #[derive(Component, Default)]
 #[storage(NullStorage)]
@@ -18,16 +28,28 @@ pub struct Controlled;
 #[derive(Component)]
 #[storage(VecStorage)]
 pub struct Render {
-    pub program_id: u32,
-    pub texture_id: u32,
-    pub vertex_buffer: u32,
-    pub vertices: Vec<f32>
+    program_id: u32,
+    texture_id: u32,
+    vertex_buffer: u32,
+    vertices: Vec<f32>
+}
+impl Render {
+    pub fn new(program_id: u32, texture_id: u32, buffer_id: u32, vertices: Vec<f32>) -> Render {
+        Render {program_id, texture_id, vertex_buffer: buffer_id, vertices }
+    }
 }
 
 // Resources
 pub struct DeltaTime {
-    pub last: std::time::Instant,
-    pub delta: std::time::Duration
+    last: std::time::Instant,
+    delta: std::time::Duration
+}
+impl DeltaTime {
+    fn update(&mut self) {
+        let now = std::time::Instant::now();
+        self.delta = now - self.last;
+        self.last = now;
+    }
 }
 impl Default for DeltaTime {
     fn default() -> DeltaTime {
@@ -52,16 +74,6 @@ impl InputState {
             right: false,
             action: false
         }
-    }
-}
-
-#[derive(Default)]
-pub struct VertexInformation {
-    pub vertices: Vec<f32>
-}
-impl VertexInformation {
-    pub fn new(vertices: Vec<f32>) -> VertexInformation {
-        VertexInformation { vertices }
     }
 }
 
@@ -128,10 +140,7 @@ impl<'a> System<'a> for TimeSystem {
 
     fn run(&mut self, mut delta_time: Self::SystemData) {
 
-        let now = std::time::Instant::now();
-        delta_time.delta = now - delta_time.last;
-        delta_time.last = now;
-        
+        delta_time.update();
     }
 
 }

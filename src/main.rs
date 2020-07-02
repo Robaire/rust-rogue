@@ -11,9 +11,8 @@ use shader::{Shader, Program};
 
 pub mod component_system;
 use component_system::{Position, Velocity, Controlled, Render};
-use component_system::{DeltaTime, InputState, VertexInformation};
+use component_system::{DeltaTime, InputState};
 use component_system::{TimeSystem, ControlSystem, PhysicsSystem, RenderSystem};
-
 
 extern crate specs;
 use specs::prelude::*;
@@ -27,12 +26,8 @@ fn main() {
     world.register::<Velocity>();
     world.register::<Controlled>();
     world.register::<Render>();
-    world.insert(DeltaTime{
-        last: std::time::Instant::now(),
-        delta: std::time::Duration::from_secs(0)
-    });
+    world.insert(DeltaTime::default());
     world.insert(InputState::new());
-    world.insert(VertexInformation::new(vec![]));
 
     let mut dispatcher = DispatcherBuilder::new()
     .with(TimeSystem, "TimeSystem", &[])
@@ -74,13 +69,13 @@ fn main() {
     assert_eq!(gl_attributes.context_version(), (3, 3));
 
     // Create the OpenGL Context
-    let gl_context = match window.gl_create_context() {
+    let _gl_context = match window.gl_create_context() {
         Ok(context) => context,
         Err(message) => panic!(format!("Failed to create OpenGL Context: {}", message))
     };
 
     // Load the OpenGL Functions
-    let gl = gl::load_with(|s| video_subsystem.gl_get_proc_address(s) as *const std::ffi::c_void);
+    let _gl = gl::load_with(|s| video_subsystem.gl_get_proc_address(s) as *const std::ffi::c_void);
 
     unsafe{ gl::Enable(gl::CULL_FACE); };
 
@@ -123,11 +118,6 @@ fn main() {
         0.1, -0.1, 0.0, 1.0, 0.0,
         0.1, 0.1, 0.0, 1.0, 1.0
     ];
-
-    {
-    let mut vi = world.write_resource::<VertexInformation>();
-    vi.vertices = square_vertices.to_vec();
-    }
 
     // Create a vertex buffer
     let mut square_vbo = 0;
@@ -224,30 +214,28 @@ fn main() {
         gl::Enable(gl::BLEND);
 
         gl::ClearColor(0.3, 0.3, 0.5, 1.0);
-        // gl::Clear(gl::COLOR_BUFFER_BIT);
-        // gl::DrawArrays(gl::TRIANGLES, 0, 6);
+        gl::Clear(gl::COLOR_BUFFER_BIT);
     };
 
     let player = world.create_entity()
-        .with(Position{x: 0.0, y: 0.0, z: 0.0})
-        .with(Velocity{x: 0.0, y: 0.0, z: 0.0})
+        .with(Position::new())
+        .with(Velocity::new())
         .with(Controlled)
-        .with(Render{
-            program_id: shader_program.id,
-            texture_id: texture_id,
-            vertex_buffer: square_vbo,
-            vertices: square_vertices.clone()
-        })
+        .with(Render::new(
+            shader_program.id, 
+            texture_id,
+            square_vbo,
+            square_vertices.clone()))
         .build();
 
     let item = world.create_entity()
-        .with(Position{x: -0.5, y: 0.0, z: 0.0})
-        .with(Render{
-            program_id: shader_program.id,
-            texture_id: texture_id_2,
-            vertex_buffer: square_vbo,
-            vertices: small_square_vertices.clone()
-        })
+        .with(Position::new())
+        .with(Render::new(
+            shader_program.id,
+            texture_id_2,
+            square_vbo,
+            small_square_vertices.clone()
+        ))
         .build();
 
     // Enter the main event loop
