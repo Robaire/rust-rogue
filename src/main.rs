@@ -174,7 +174,7 @@ fn main() {
     unsafe {
         gl::BindTexture(gl::TEXTURE_2D, texture_id);
         gl::TexImage2D(
-            gl::TEXTURE_2D, 0, gl::RGB as i32, 
+            gl::TEXTURE_2D, 0, gl::RGBA8 as i32, 
             image.width() as i32, 
             image.height() as i32, 
             0, gl::RGBA, gl::UNSIGNED_BYTE,
@@ -198,7 +198,7 @@ fn main() {
     unsafe {
         gl::BindTexture(gl::TEXTURE_2D, texture_id_2);
         gl::TexImage2D(
-            gl::TEXTURE_2D, 0, gl::RGB as i32, 
+            gl::TEXTURE_2D, 0, gl::RGBA8 as i32, 
             image.width() as i32, 
             image.height() as i32, 
             0, gl::RGBA, gl::UNSIGNED_BYTE,
