@@ -18,6 +18,11 @@ extern crate specs;
 use specs::prelude::*;
 use specs::WorldExt;
 
+use std::ffi::CString;
+
+extern crate nalgebra;
+use nalgebra::Orthographic3;
+
 fn init_sdl() -> (sdl2::Sdl, sdl2::video::Window, sdl2::video::GLContext) {
 
     // Initialize SDL
@@ -118,6 +123,30 @@ fn main() {
 
     // Use shader program
     shader_program.set_used();
+
+    // Set the projection matrix
+    let projection_id = unsafe{ gl::GetUniformLocation(shader_program.id, CString::new("projection").unwrap().as_ptr()) };
+    let projection: Vec<f32> = vec![
+        1.0, 0.0, 0.0, 0.0,
+        0.0, 1.0, 0.0, 0.0,
+        0.0, 0.0, 1.0, 0.0,
+        0.0, 0.0, 0.0, 1.0
+    ]; 
+
+    let aspect = 1.0;
+    let projection = Orthographic3::new(-aspect, aspect, -1.0, 1.0, -1.0, 1.0);
+
+    // Write the projection to the gpu
+    unsafe{
+        gl::UniformMatrix4fv(
+            projection_id,
+            1,
+            gl::FALSE,
+            projection.to_homogeneous().as_slice().as_ptr()
+        );
+    };
+    
+
 
     // Create Square
     let square_vertices: Vec<f32> = vec![
@@ -270,7 +299,22 @@ fn main() {
                 Event::KeyDown {keycode: Some(key), ..} => {},
                 Event::MouseButtonDown {mouse_btn: button, x, y, ..} => println!("Button Press: {}, {}, {:?}", x, y, button),
                 Event::Window {win_event, ..} => match win_event {
-                    WindowEvent::Resized(x, y) => unsafe { gl::Viewport(0, 0, x, y); },
+                    WindowEvent::Resized(x, y) => unsafe { 
+
+                        gl::Viewport(0, 0, x, y); 
+
+                        // Compute the projection
+                        let aspect = x as f32 / y as f32;
+                        let projection = Orthographic3::new(-aspect, aspect, -1.0, 1.0, -1.0, 1.0);
+                    
+                        // Write the projection to the gpu
+                        gl::UniformMatrix4fv(
+                            projection_id,
+                            1,
+                            gl::FALSE,
+                            projection.to_homogeneous().as_slice().as_ptr()
+                        );
+                    },
                     _ => {}
                 },
                 Event::Quit {..} => break 'main_loop,
