@@ -1,3 +1,5 @@
+use std::ffi::CString;
+
 extern crate specs;
 use specs::prelude::*;
 use specs::{Component, VecStorage};
@@ -18,6 +20,18 @@ pub struct Velocity { x: f64, y: f64, z: f64 }
 impl Velocity {
     pub fn new() -> Velocity {
         Velocity{ x: 0.0, y: 0.0, z: 0.0 }
+    }
+}
+
+#[derive(Component)]
+#[storage(VecStorage)]
+pub struct Animation {
+    current_frame: f32,
+    total_frames: f32
+}
+impl Animation {
+    pub fn new(total_frames: f32) -> Animation {
+        Animation{ current_frame: 0.0, total_frames }
     }
 }
 
@@ -80,15 +94,15 @@ impl InputState {
 // Systems
 pub struct RenderSystem;
 impl<'a> System<'a> for RenderSystem {
-    type SystemData = (ReadStorage<'a, Render>, ReadStorage<'a, Position>);
+    type SystemData = (ReadStorage<'a, Render>, ReadStorage<'a, Position>, WriteStorage<'a, Animation>);
 
-    fn run(&mut self, (render, position): Self::SystemData) {
+    fn run(&mut self, (render, position, mut animation): Self::SystemData) {
 
         unsafe{
             gl::Clear(gl::COLOR_BUFFER_BIT);
         };
 
-        for (render, position) in (&render, &position).join() {
+        for (render, position, animation) in (&render, &position, &mut animation).join() {
 
             let mut vertices = render.vertices.clone();
 
@@ -110,10 +124,18 @@ impl<'a> System<'a> for RenderSystem {
             vertices[25] += position.x as f32;
             vertices[26] += position.y as f32;
 
+            let layer = animation.current_frame;
+            animation.current_frame += 0.002;
+            if animation.current_frame >= animation.total_frames { animation.current_frame = 0.0; };
 
             // Prepare the GPU
             unsafe {
 
+                // Update animation layer
+                let layer_loc = gl::GetUniformLocation(render.program_id, CString::new("layer").unwrap().as_ptr());
+                gl::Uniform1i(layer_loc, layer as i32);
+
+                // Update Vertex Information
                 gl::BindBuffer(gl::ARRAY_BUFFER, render.vertex_buffer);
                 gl::BufferData(
                     gl::ARRAY_BUFFER,
@@ -124,7 +146,8 @@ impl<'a> System<'a> for RenderSystem {
                 gl::BindBuffer(gl::ARRAY_BUFFER, 0);
 
                 gl::UseProgram(render.program_id);
-                gl::BindTexture(gl::TEXTURE_2D, render.texture_id);
+
+                gl::BindTexture(gl::TEXTURE_2D_ARRAY, render.texture_id);
 
                 gl::DrawArrays(gl::TRIANGLES, 0, 6);
             };

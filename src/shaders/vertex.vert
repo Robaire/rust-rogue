@@ -1,15 +1,15 @@
 #version 330 core
 
-layout (location = 0) in vec3 Position;
-layout (location = 1) in vec2 vertexUV;
+layout (location = 0) in vec3 position;
+layout (location = 1) in vec2 vertex_texture_coordinate;
 
 uniform mat4 projection;
 
-out vec2 UV;
+out vec2 texture_coordinate;
 
 void main() {
 
-    gl_Position = projection * vec4(Position, 1.0);
+    gl_Position = projection * vec4(position, 1.0);
 
-    UV = vertexUV;
+    texture_coordinate = vertex_texture_coordinate;
 }

@@ -10,7 +10,7 @@ pub mod shader;
 use shader::{Shader, Program};
 
 pub mod component_system;
-use component_system::{Position, Velocity, Controlled, Render};
+use component_system::{Position, Velocity, Controlled, Render, Animation};
 use component_system::{DeltaTime, InputState};
 use component_system::{TimeSystem, ControlSystem, PhysicsSystem, RenderSystem};
 
@@ -76,6 +76,7 @@ fn setup_ecs<'a>() -> (specs::World, specs::Dispatcher<'a, 'a>) {
      world.register::<Velocity>();
      world.register::<Controlled>();
      world.register::<Render>();
+     world.register::<Animation>();
 
      // Insert Resources
      world.insert(DeltaTime::default());
@@ -126,12 +127,6 @@ fn main() {
 
     // Set the projection matrix
     let projection_id = unsafe{ gl::GetUniformLocation(shader_program.id, CString::new("projection").unwrap().as_ptr()) };
-    let projection: Vec<f32> = vec![
-        1.0, 0.0, 0.0, 0.0,
-        0.0, 1.0, 0.0, 0.0,
-        0.0, 0.0, 1.0, 0.0,
-        0.0, 0.0, 0.0, 1.0
-    ]; 
 
     let aspect = 1.0;
     let projection = Orthographic3::new(-aspect, aspect, -1.0, 1.0, -1.0, 1.0);
@@ -146,8 +141,6 @@ fn main() {
         );
     };
     
-
-
     // Create Square
     let square_vertices: Vec<f32> = vec![
         -0.3, -0.3, 0.0, 0.0, 0.0,
@@ -208,53 +201,86 @@ fn main() {
         );
     };
 
-    // Load the Image
-    // TODO: Fix transparency values
-    let image = match image::open("./src/frames/ogre_idle_anim_f0.png") {
+    // Load the animation as a texture array
+    let idle_animation = match image::open("./src/animations/ogre_idle_animation.png") {
         Ok(image) => image.flipv().into_rgba(),
         Err(message) => panic!(format!("Image could not be loaded: {}", message))
-    };
+    }; 
+
+    // Create a texture array and store image data in it
+    let mut texture_array_id = 0;
+
+    unsafe { 
+        gl::GenTextures(1, &mut texture_array_id); 
+        gl::BindTexture(gl::TEXTURE_2D_ARRAY, texture_array_id);
+        gl::TexStorage3D(gl::TEXTURE_2D_ARRAY, 1, gl::RGBA8, 22, 28, 4);
     
-    // Create a texture
-    let mut texture_id = 0;
-    unsafe { gl::GenTextures(1, &mut texture_id); };
-    
-    // Give the texture image data
-    unsafe {
-        gl::BindTexture(gl::TEXTURE_2D, texture_id);
-        gl::TexImage2D(
-            gl::TEXTURE_2D, 0, gl::RGBA8 as i32, 
-            image.width() as i32, 
-            image.height() as i32, 
-            0, gl::RGBA, gl::UNSIGNED_BYTE,
-            image.into_raw().as_ptr() as *const gl::types::GLvoid);
-        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
-        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as i32);
+        gl::PixelStorei(gl::UNPACK_ROW_LENGTH, 22 * 4);
+        gl::PixelStorei(gl::UNPACK_IMAGE_HEIGHT, 28);
+
+        gl::PixelStorei(gl::UNPACK_SKIP_PIXELS, 0);
+        gl::TexSubImage3D(gl::TEXTURE_2D_ARRAY, 0, 0, 0, 0, 22, 28, 1, gl::RGBA, gl::UNSIGNED_BYTE, idle_animation.as_ptr() as *const gl::types::GLvoid);
+
+        gl::PixelStorei(gl::UNPACK_SKIP_PIXELS, 22);
+        gl::TexSubImage3D(gl::TEXTURE_2D_ARRAY, 0, 0, 0, 1, 22, 28, 1, gl::RGBA, gl::UNSIGNED_BYTE, idle_animation.as_ptr() as *const gl::types::GLvoid);
+
+        gl::PixelStorei(gl::UNPACK_SKIP_PIXELS, 44);
+        gl::TexSubImage3D(gl::TEXTURE_2D_ARRAY, 0, 0, 0, 2, 22, 28, 1, gl::RGBA, gl::UNSIGNED_BYTE, idle_animation.as_ptr() as *const gl::types::GLvoid);
+
+        gl::PixelStorei(gl::UNPACK_SKIP_PIXELS, 66);
+        gl::TexSubImage3D(gl::TEXTURE_2D_ARRAY, 0, 0, 0, 3, 22, 28, 1, gl::RGBA, gl::UNSIGNED_BYTE, idle_animation.as_ptr() as *const gl::types::GLvoid);
+
+        gl::TexParameteri(gl::TEXTURE_2D_ARRAY, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
+        gl::TexParameteri(gl::TEXTURE_2D_ARRAY, gl::TEXTURE_MIN_FILTER, gl::LINEAR as i32);
     };
 
-    // Load the Image
-    // TODO: Fix transparency values
-    let image = match image::open("./src/frames/chest_empty_open_anim_f0.png") {
-        Ok(image) => image.flipv().into_rgba(),
-        Err(message) => panic!(format!("Image could not be loaded: {}", message))
-    };
+
+    // // Load the Image
+    // let image = match image::open("./src/frames/ogre_idle_anim_f0.png") {
+    //     Ok(image) => image.flipv().into_rgba(),
+    //     Err(message) => panic!(format!("Image could not be loaded: {}", message))
+    // };
     
-    // Create a texture
-    let mut texture_id_2 = 0;
-    unsafe { gl::GenTextures(1, &mut texture_id_2); };
+    // // Create a texture
+    // let mut texture_id = 0;
+    // unsafe { gl::GenTextures(1, &mut texture_id); };
     
-    // Give the texture image data
-    unsafe {
-        gl::BindTexture(gl::TEXTURE_2D, texture_id_2);
-        gl::TexImage2D(
-            gl::TEXTURE_2D, 0, gl::RGBA8 as i32, 
-            image.width() as i32, 
-            image.height() as i32, 
-            0, gl::RGBA, gl::UNSIGNED_BYTE,
-            image.into_raw().as_ptr() as *const gl::types::GLvoid);
-        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
-        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as i32);
-    };
+    // // Give the texture image data
+    // unsafe {
+    //     gl::BindTexture(gl::TEXTURE_2D, texture_id);
+    //     gl::TexImage2D(
+    //         gl::TEXTURE_2D, 0, gl::RGBA8 as i32, 
+    //         image.width() as i32, 
+    //         image.height() as i32, 
+    //         0, gl::RGBA, gl::UNSIGNED_BYTE,
+    //         image.into_raw().as_ptr() as *const gl::types::GLvoid);
+    //     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
+    //     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as i32);
+    // };
+
+    // // Load the Image
+    // // TODO: Fix transparency values
+    // let image = match image::open("./src/frames/chest_empty_open_anim_f0.png") {
+    //     Ok(image) => image.flipv().into_rgba(),
+    //     Err(message) => panic!(format!("Image could not be loaded: {}", message))
+    // };
+    
+    // // Create a texture
+    // let mut texture_id_2 = 0;
+    // unsafe { gl::GenTextures(1, &mut texture_id_2); };
+    
+    // // Give the texture image data
+    // unsafe {
+    //     gl::BindTexture(gl::TEXTURE_2D, texture_id_2);
+    //     gl::TexImage2D(
+    //         gl::TEXTURE_2D, 0, gl::RGBA8 as i32, 
+    //         image.width() as i32, 
+    //         image.height() as i32, 
+    //         0, gl::RGBA, gl::UNSIGNED_BYTE,
+    //         image.into_raw().as_ptr() as *const gl::types::GLvoid);
+    //     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
+    //     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as i32);
+    // };
 
     // Last Bit
     unsafe {
@@ -272,22 +298,23 @@ fn main() {
         .with(Position::new())
         .with(Velocity::new())
         .with(Controlled)
+        .with(Animation::new(4.0))
         .with(Render::new(
             shader_program.id, 
-            texture_id,
+            texture_array_id,
             square_vbo,
             square_vertices.clone()))
         .build();
 
-    let item = world.create_entity()
-        .with(Position::new())
-        .with(Render::new(
-            shader_program.id,
-            texture_id_2,
-            square_vbo,
-            small_square_vertices.clone()
-        ))
-        .build();
+    // let item = world.create_entity()
+    //     .with(Position::new())
+    //     .with(Render::new(
+    //         shader_program.id,
+    //         texture_id_2,
+    //         square_vbo,
+    //         small_square_vertices.clone()
+    //     ))
+    //     .build();
 
     // Enter the main event loop
     let mut event_pump = sdl_context.event_pump().unwrap();
@@ -306,7 +333,7 @@ fn main() {
                         // Compute the projection
                         let aspect = x as f32 / y as f32;
                         let projection = Orthographic3::new(-aspect, aspect, -1.0, 1.0, -1.0, 1.0);
-                    
+                     
                         // Write the projection to the gpu
                         gl::UniformMatrix4fv(
                             projection_id,
