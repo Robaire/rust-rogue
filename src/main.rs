@@ -10,9 +10,7 @@ pub mod shader;
 use shader::{Shader, Program};
 
 pub mod component_system;
-use component_system::{Position, Velocity, Controlled, Render, Animation};
-use component_system::{DeltaTime, InputState};
-use component_system::{TimeSystem, ControlSystem, PhysicsSystem, RenderSystem};
+use component_system::*;
 
 extern crate specs;
 use specs::prelude::*;
@@ -75,8 +73,8 @@ fn setup_ecs<'a>() -> (specs::World, specs::Dispatcher<'a, 'a>) {
      world.register::<Position>();
      world.register::<Velocity>();
      world.register::<Controlled>();
-     world.register::<Render>();
      world.register::<Animation>();
+     world.register::<Draw>();
 
      // Insert Resources
      world.insert(DeltaTime::default());
@@ -89,9 +87,10 @@ fn setup_ecs<'a>() -> (specs::World, specs::Dispatcher<'a, 'a>) {
      .with(TimeSystem, "TimeSystem", &[])
      .with(ControlSystem, "ControlSystem", &["TimeSystem"])
      .with(PhysicsSystem, "PhysicsSystem", &["ControlSystem"])
+     .with(AnimationSystem, "AnimationSystem", &["TimeSystem"])
 
      // Add serial systems
-     .with_thread_local(RenderSystem)
+     .with_thread_local(DrawSystem)
      .build();  
 
      (world, dispatcher)
@@ -111,7 +110,7 @@ fn main() {
         Err(message) => panic!(format!("Failed to create vertex shader: {}", message))
     };
 
-    let fragment_shader = match Shader::new_from_file("./src/shaders/fragment.frag", gl::FRAGMENT_SHADER) {
+    let fragment_shader = match Shader::new_from_file("./src/shaders/animation.frag", gl::FRAGMENT_SHADER) {
         Ok(shader) => shader,
         Err(message) => panic!(format!("Failed to create fragment shader: {}", message))
     };
@@ -135,6 +134,38 @@ fn main() {
     unsafe{
         gl::UniformMatrix4fv(
             projection_id,
+            1,
+            gl::FALSE,
+            projection.to_homogeneous().as_slice().as_ptr()
+        );
+    };
+
+    // Load shaders
+    let fragment_shader = match Shader::new_from_file("./src/shaders/static.frag", gl::FRAGMENT_SHADER) {
+        Ok(shader) => shader,
+        Err(message) => panic!(format!("Failed to create fragment shader: {}", message))
+    };
+
+    // Create shader program
+    let static_shader_program = match Program::new().attach_shader(&vertex_shader).attach_shader(&fragment_shader).link() {
+        Ok(program) => program,
+        Err(message) => panic!(format!("Failed to create shader program: {}", message))
+    };
+
+    // Use shader program
+    static_shader_program.set_used();
+
+    // Set the projection matrix
+    let static_projection_id = unsafe{ gl::GetUniformLocation(static_shader_program.id, CString::new("projection").unwrap().as_ptr()) };
+    println!("{}", projection_id);
+
+    let aspect = 1.0;
+    let projection = Orthographic3::new(-aspect, aspect, -1.0, 1.0, -1.0, 1.0);
+
+    // Write the projection to the gpu
+    unsafe{
+        gl::UniformMatrix4fv(
+            static_projection_id,
             1,
             gl::FALSE,
             projection.to_homogeneous().as_slice().as_ptr()
@@ -234,53 +265,32 @@ fn main() {
         gl::TexParameteri(gl::TEXTURE_2D_ARRAY, gl::TEXTURE_MIN_FILTER, gl::LINEAR as i32);
     };
 
+    static_shader_program.set_used();
 
-    // // Load the Image
-    // let image = match image::open("./src/frames/ogre_idle_anim_f0.png") {
-    //     Ok(image) => image.flipv().into_rgba(),
-    //     Err(message) => panic!(format!("Image could not be loaded: {}", message))
-    // };
+    // Load the Image
+    let image = match image::open("./src/frames/chest_empty_open_anim_f0.png") {
+        Ok(image) => image.flipv().into_rgba(),
+        Err(message) => panic!(format!("Image could not be loaded: {}", message))
+    };
     
-    // // Create a texture
-    // let mut texture_id = 0;
-    // unsafe { gl::GenTextures(1, &mut texture_id); };
+    // Create a texture
+    let mut chest_texture_id = 0;
+    unsafe { gl::GenTextures(1, &mut chest_texture_id); };
     
-    // // Give the texture image data
-    // unsafe {
-    //     gl::BindTexture(gl::TEXTURE_2D, texture_id);
-    //     gl::TexImage2D(
-    //         gl::TEXTURE_2D, 0, gl::RGBA8 as i32, 
-    //         image.width() as i32, 
-    //         image.height() as i32, 
-    //         0, gl::RGBA, gl::UNSIGNED_BYTE,
-    //         image.into_raw().as_ptr() as *const gl::types::GLvoid);
-    //     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
-    //     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as i32);
-    // };
-
-    // // Load the Image
-    // // TODO: Fix transparency values
-    // let image = match image::open("./src/frames/chest_empty_open_anim_f0.png") {
-    //     Ok(image) => image.flipv().into_rgba(),
-    //     Err(message) => panic!(format!("Image could not be loaded: {}", message))
-    // };
-    
-    // // Create a texture
-    // let mut texture_id_2 = 0;
-    // unsafe { gl::GenTextures(1, &mut texture_id_2); };
-    
-    // // Give the texture image data
-    // unsafe {
-    //     gl::BindTexture(gl::TEXTURE_2D, texture_id_2);
-    //     gl::TexImage2D(
-    //         gl::TEXTURE_2D, 0, gl::RGBA8 as i32, 
-    //         image.width() as i32, 
-    //         image.height() as i32, 
-    //         0, gl::RGBA, gl::UNSIGNED_BYTE,
-    //         image.into_raw().as_ptr() as *const gl::types::GLvoid);
-    //     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
-    //     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as i32);
-    // };
+    // Give the texture image data
+    unsafe {
+        gl::PixelStorei(gl::UNPACK_ROW_LENGTH, 0);
+        gl::PixelStorei(gl::UNPACK_SKIP_PIXELS, 0);
+        gl::BindTexture(gl::TEXTURE_2D, chest_texture_id);
+        gl::TexImage2D(
+            gl::TEXTURE_2D, 0, gl::RGBA8 as i32, 
+            image.width() as i32, 
+            image.height() as i32, 
+            0, gl::RGBA, gl::UNSIGNED_BYTE,
+            image.into_raw().as_ptr() as *const gl::types::GLvoid);
+        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
+        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as i32);
+    };
 
     // Last Bit
     unsafe {
@@ -298,24 +308,25 @@ fn main() {
         .with(Position::new())
         .with(Velocity::new())
         .with(Controlled)
-        .with(Animation::new(4.0))
-        .with(Render::new(
-            shader_program.id, 
-            texture_array_id,
+        .with(Animation::new(4))
+        .with(Draw::new(
+            shader_program.id,
             square_vbo,
-            square_vertices.clone()))
+            square_vertices.clone(),
+            DrawType::Dynamic{texture_id: texture_array_id, layer: 0}
+        ))
         .build();
 
-    // let item = world.create_entity()
-    //     .with(Position::new())
-    //     .with(Render::new(
-    //         shader_program.id,
-    //         texture_id_2,
-    //         square_vbo,
-    //         small_square_vertices.clone()
-    //     ))
-    //     .build();
-
+    let chest = world.create_entity()
+        .with(Position::new())
+        .with(Draw::new(
+            static_shader_program.id,
+            square_vbo,
+            small_square_vertices.clone(),
+            DrawType::Static{texture_id: chest_texture_id}
+        ))
+        .build();
+        
     // Enter the main event loop
     let mut event_pump = sdl_context.event_pump().unwrap();
     'main_loop: loop {
@@ -335,12 +346,22 @@ fn main() {
                         let projection = Orthographic3::new(-aspect, aspect, -1.0, 1.0, -1.0, 1.0);
                      
                         // Write the projection to the gpu
+                        shader_program.set_used();
                         gl::UniformMatrix4fv(
                             projection_id,
                             1,
                             gl::FALSE,
                             projection.to_homogeneous().as_slice().as_ptr()
                         );
+
+                        static_shader_program.set_used();
+                        gl::UniformMatrix4fv(
+                            static_projection_id,
+                            1,
+                            gl::FALSE,
+                            projection.to_homogeneous().as_slice().as_ptr()
+                        );
+
                     },
                     _ => {}
                 },

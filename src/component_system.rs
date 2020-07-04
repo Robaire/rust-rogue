@@ -26,32 +26,44 @@ impl Velocity {
 #[derive(Component)]
 #[storage(VecStorage)]
 pub struct Animation {
-    current_frame: f32,
-    total_frames: f32
+    animation_speed: f32,
+    time_elapsed: std::time::Duration,
+    current_frame: u32,
+    total_frames: u32
 }
 impl Animation {
-    pub fn new(total_frames: f32) -> Animation {
-        Animation{ current_frame: 0.0, total_frames }
+    pub fn new(total_frames: u32) -> Animation {
+        Animation { 
+            animation_speed: 0.15, // Seconds
+            time_elapsed: std::time::Duration::new(0, 0), 
+            current_frame: 0, 
+            total_frames 
+        }
+    }
+}
+
+pub enum DrawType {
+    Static{ texture_id: u32 },
+    Dynamic{ texture_id: u32, layer: u32 }
+}
+
+#[derive(Component)]
+#[storage(VecStorage)]
+pub struct Draw {
+    shader_program: u32,
+    vertex_buffer: u32,
+    vertices: Vec<f32>,
+    draw_type: DrawType
+}
+impl Draw {
+    pub fn new(shader_program: u32, vertex_buffer: u32, vertices: Vec<f32>, draw_type: DrawType) -> Draw {
+        Draw {shader_program, vertex_buffer, vertices, draw_type }
     }
 }
 
 #[derive(Component, Default)]
 #[storage(NullStorage)]
 pub struct Controlled;
-
-#[derive(Component)]
-#[storage(VecStorage)]
-pub struct Render {
-    program_id: u32,
-    texture_id: u32,
-    vertex_buffer: u32,
-    vertices: Vec<f32>
-}
-impl Render {
-    pub fn new(program_id: u32, texture_id: u32, buffer_id: u32, vertices: Vec<f32>) -> Render {
-        Render {program_id, texture_id, vertex_buffer: buffer_id, vertices }
-    }
-}
 
 // Resources
 pub struct DeltaTime {
@@ -92,19 +104,55 @@ impl InputState {
 }
 
 // Systems
-pub struct RenderSystem;
-impl<'a> System<'a> for RenderSystem {
-    type SystemData = (ReadStorage<'a, Render>, ReadStorage<'a, Position>, WriteStorage<'a, Animation>);
 
-    fn run(&mut self, (render, position, mut animation): Self::SystemData) {
+/// Updates the animation frame given the elapsed system time and the objects frame rate
+pub struct AnimationSystem;
+impl<'a> System<'a> for AnimationSystem {
+    type SystemData = (WriteStorage<'a, Animation>, WriteStorage<'a, Draw>, Read<'a, DeltaTime>);
 
-        unsafe{
+    fn run(&mut self, (mut animation, mut draw, delta_time): Self::SystemData) {
+
+        for animation in (&mut animation).join() {
+            
+            animation.time_elapsed += delta_time.delta;
+
+            // Check if the next frame should be displayed
+            if animation.time_elapsed.as_secs_f32() >= animation.animation_speed {
+                animation.current_frame += 1;
+    
+                // Set the frame back to 0 if the frame count exceeds its maximum
+                if animation.current_frame >= animation.total_frames {
+                    animation.current_frame = 0;
+                }
+    
+                // Reset the elapsed time counter
+                animation.time_elapsed = std::time::Duration::new(0, 0);
+            }
+        }
+
+        // Update the layer for dynamically drawn entities
+        for (animation, draw) in (&animation, &mut draw).join() {
+            match draw.draw_type {
+                DrawType::Dynamic{texture_id, layer} => draw.draw_type = DrawType::Dynamic{texture_id, layer: animation.current_frame},
+                _ => ()
+            }
+        }
+    }
+}
+
+pub struct DrawSystem;
+impl<'a> System<'a> for DrawSystem {
+    type SystemData = (ReadStorage<'a, Draw>, ReadStorage<'a, Position>);
+
+    fn run(&mut self, (draw, position): Self::SystemData) {
+
+        unsafe {
             gl::Clear(gl::COLOR_BUFFER_BIT);
         };
 
-        for (render, position, animation) in (&render, &position, &mut animation).join() {
+        for (draw, position) in (&draw, &position).join() {
 
-            let mut vertices = render.vertices.clone();
+            let mut vertices = draw.vertices.clone();
 
             vertices[0] += position.x as f32;
             vertices[1] += position.y as f32;
@@ -124,19 +172,9 @@ impl<'a> System<'a> for RenderSystem {
             vertices[25] += position.x as f32;
             vertices[26] += position.y as f32;
 
-            let layer = animation.current_frame;
-            animation.current_frame += 0.002;
-            if animation.current_frame >= animation.total_frames { animation.current_frame = 0.0; };
-
-            // Prepare the GPU
+            // Update Vertex Information
             unsafe {
-
-                // Update animation layer
-                let layer_loc = gl::GetUniformLocation(render.program_id, CString::new("layer").unwrap().as_ptr());
-                gl::Uniform1i(layer_loc, layer as i32);
-
-                // Update Vertex Information
-                gl::BindBuffer(gl::ARRAY_BUFFER, render.vertex_buffer);
+                gl::BindBuffer(gl::ARRAY_BUFFER, draw.vertex_buffer);
                 gl::BufferData(
                     gl::ARRAY_BUFFER,
                     (vertices.len() * std::mem::size_of::<f32>()) as gl::types::GLsizeiptr,
@@ -144,16 +182,26 @@ impl<'a> System<'a> for RenderSystem {
                     gl::STATIC_DRAW
                 );
                 gl::BindBuffer(gl::ARRAY_BUFFER, 0);
-
-                gl::UseProgram(render.program_id);
-
-                gl::BindTexture(gl::TEXTURE_2D_ARRAY, render.texture_id);
-
-                gl::DrawArrays(gl::TRIANGLES, 0, 6);
             };
 
+            match draw.draw_type {
+                DrawType::Static{texture_id} => {
+                    unsafe {
+                        gl::UseProgram(draw.shader_program);
+                        gl::BindTexture(gl::TEXTURE_2D, texture_id);
+                        gl::DrawArrays(gl::TRIANGLES, 0, 6);
+                    };
+                },
+                DrawType::Dynamic{texture_id, layer} => {
+                    unsafe {
+                        gl::UseProgram(draw.shader_program);
+                        gl::BindTexture(gl::TEXTURE_2D_ARRAY, texture_id);
+                        gl::Uniform1i(gl::GetUniformLocation(draw.shader_program, CString::new("layer").unwrap().as_ptr()), layer as i32);
+                        gl::DrawArrays(gl::TRIANGLES, 0, 6);
+                    }
+                }
+            }
         }
-
     }
 }
 

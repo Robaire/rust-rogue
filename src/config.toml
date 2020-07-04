@@ -1,0 +1,15 @@
+[[entity]]
+name = "player"
+components = [
+    "position",
+    "velocity",
+    "render",
+    "controlled"
+]
+
+[[entity]]
+name = "chest"
+components = [
+    "position",
+    "render"
+]
