@@ -12,3 +12,6 @@ sdl2 = "0.34.0"
 image = "0.23.6"
 nalgebra = "0.21.0"
 specs = {version = "0.16.1", features = ["specs-derive"]}
+# freetype = "0.7.0"
+# freetype-sys = "0.13.1"
+freetype-rs = "0.26.0"
