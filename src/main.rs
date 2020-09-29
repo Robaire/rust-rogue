@@ -21,6 +21,8 @@ use std::ffi::CString;
 extern crate nalgebra;
 use nalgebra::Orthographic3;
 
+extern crate freetype;
+
 fn init_sdl() -> (sdl2::Sdl, sdl2::video::Window, sdl2::video::GLContext) {
 
     // Initialize SDL
@@ -98,6 +100,22 @@ fn setup_ecs<'a>() -> (specs::World, specs::Dispatcher<'a, 'a>) {
 
 fn main() {
 
+    // Initialize Freetype
+    let ft_library = freetype::Library::init().unwrap();
+
+    let face = ft_library.new_face("./src/fonts/Pixeletter.ttf", 0).unwrap();
+
+    face.set_char_size(5000, 0, 50, 0).unwrap();
+
+    face.load_char('A' as usize, freetype::face::LoadFlag::RENDER).unwrap();
+
+    let glyph = face.glyph().bitmap();
+
+    println!("({}, {})", glyph.width(), glyph.rows());
+    println!("{}", glyph.buffer().len());
+
+    
+
     // Initialize SDL and create a window
     let (sdl_context, window, _gl_context) = init_sdl();
 
@@ -157,7 +175,6 @@ fn main() {
 
     // Set the projection matrix
     let static_projection_id = unsafe{ gl::GetUniformLocation(static_shader_program.id, CString::new("projection").unwrap().as_ptr()) };
-    println!("{}", projection_id);
 
     let aspect = 1.0;
     let projection = Orthographic3::new(-aspect, aspect, -1.0, 1.0, -1.0, 1.0);
@@ -326,7 +343,7 @@ fn main() {
             DrawType::Static{texture_id: chest_texture_id}
         ))
         .build();
-        
+      
     // Enter the main event loop
     let mut event_pump = sdl_context.event_pump().unwrap();
     'main_loop: loop {
