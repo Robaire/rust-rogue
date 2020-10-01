@@ -5,6 +5,7 @@ use specs::prelude::*;
 use specs::{Component, VecStorage};
 
 // Components
+/// Entity position in world coordinates
 #[derive(Component, Debug)]
 #[storage(VecStorage)]
 pub struct Position { x: f64, y: f64, z: f64 }
@@ -14,6 +15,7 @@ impl Position {
     }
 }
 
+/// Entity velocity in world coordinates
 #[derive(Component)]
 #[storage(VecStorage)]
 pub struct Velocity { x: f64, y: f64, z: f64 }
@@ -23,6 +25,7 @@ impl Velocity {
     }
 }
 
+/// Determines if an entity is animated
 #[derive(Component)]
 #[storage(VecStorage)]
 pub struct Animation {
@@ -42,11 +45,8 @@ impl Animation {
     }
 }
 
-pub enum DrawType {
-    Static{ texture_id: u32 },
-    Dynamic{ texture_id: u32, layer: u32 }
-}
 
+/// Controls how an entity is drawn
 #[derive(Component)]
 #[storage(VecStorage)]
 pub struct Draw {
@@ -61,11 +61,19 @@ impl Draw {
     }
 }
 
+/// Used by Draw
+pub enum DrawType {
+    Static{ texture_id: u32 },
+    Dynamic{ texture_id: u32, layer: u32 }
+}
+
+/// If an entity is controlled
 #[derive(Component, Default)]
 #[storage(NullStorage)]
 pub struct Controlled;
 
 // Resources
+/// Stores delta time
 pub struct DeltaTime {
     last: std::time::Instant,
     delta: std::time::Duration
@@ -83,6 +91,7 @@ impl Default for DeltaTime {
     }
 }
 
+/// Stores current keyboard inputs
 #[derive(Default, Debug)]
 pub struct InputState {
     pub up: bool,
@@ -140,6 +149,7 @@ impl<'a> System<'a> for AnimationSystem {
     }
 }
 
+/// Draws entities to the screen
 pub struct DrawSystem;
 impl<'a> System<'a> for DrawSystem {
     type SystemData = (ReadStorage<'a, Draw>, ReadStorage<'a, Position>);
@@ -205,6 +215,7 @@ impl<'a> System<'a> for DrawSystem {
     }
 }
 
+/// Computes the delta time step
 pub struct TimeSystem;
 impl<'a> System<'a> for TimeSystem {
     type SystemData = Write<'a, DeltaTime>;
@@ -216,6 +227,7 @@ impl<'a> System<'a> for TimeSystem {
 
 }
 
+/// Modifies entity velocity based on keyboard input
 pub struct ControlSystem;
 impl<'a> System<'a> for ControlSystem {
     type SystemData = (WriteStorage<'a, Velocity>, ReadStorage<'a, Controlled>, Read<'a, InputState>);
@@ -235,6 +247,7 @@ impl<'a> System<'a> for ControlSystem {
     }
 }
 
+/// Integrates position using velocity and delta time
 pub struct PhysicsSystem;
 impl<'a> System<'a> for PhysicsSystem {
     type SystemData = (WriteStorage<'a, Position>, ReadStorage<'a, Velocity>, Read<'a, DeltaTime>);
