@@ -10,3 +10,4 @@
 - Add object interaction
 - Make input more flexible, maybe put it in a system?
 - Add controller support
+- Add an audio system to play sound effects
