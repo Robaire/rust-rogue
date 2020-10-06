@@ -1,266 +1,340 @@
-use std::ffi::CString;
-
+extern crate nalgebra;
 extern crate specs;
-use specs::prelude::*;
-use specs::{Component, VecStorage};
 
 // Components
-/// Entity position in world coordinates
-#[derive(Component, Debug)]
-#[storage(VecStorage)]
-pub struct Position { x: f64, y: f64, z: f64 }
-impl Position {
-    pub fn new() -> Position {
-        Position{ x: 0.0, y: 0.0, z: 0.0 }
-    }
-}
+mod components {
+    use specs::{Component, NullStorage, VecStorage};
+    use crate::gl_util;
 
-/// Entity velocity in world coordinates
-#[derive(Component)]
-#[storage(VecStorage)]
-pub struct Velocity { x: f64, y: f64, z: f64 }
-impl Velocity {
-    pub fn new() -> Velocity {
-        Velocity{ x: 0.0, y: 0.0, z: 0.0 }
+    /// Entity position in world coordinates
+    #[derive(Component, Debug)]
+    #[storage(VecStorage)]
+    pub struct Position {
+        pub x: f64,
+        pub y: f64,
+        pub z: f64,
     }
-}
-
-/// Determines if an entity is animated
-#[derive(Component)]
-#[storage(VecStorage)]
-pub struct Animation {
-    animation_speed: f32,
-    time_elapsed: std::time::Duration,
-    current_frame: u32,
-    total_frames: u32
-}
-impl Animation {
-    pub fn new(total_frames: u32) -> Animation {
-        Animation { 
-            animation_speed: 0.15, // Seconds
-            time_elapsed: std::time::Duration::new(0, 0), 
-            current_frame: 0, 
-            total_frames 
+    impl Position {
+        pub fn new() -> Position {
+            Position {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            }
         }
     }
-}
 
-
-/// Controls how an entity is drawn
-#[derive(Component)]
-#[storage(VecStorage)]
-pub struct Draw {
-    shader_program: u32,
-    vertex_buffer: u32,
-    vertices: Vec<f32>,
-    draw_type: DrawType
-}
-impl Draw {
-    pub fn new(shader_program: u32, vertex_buffer: u32, vertices: Vec<f32>, draw_type: DrawType) -> Draw {
-        Draw {shader_program, vertex_buffer, vertices, draw_type }
+    /// Entity velocity in world coordinates
+    #[derive(Component)]
+    #[storage(VecStorage)]
+    pub struct Velocity {
+        pub x: f64,
+        pub y: f64,
+        pub z: f64,
     }
-}
-
-/// Used by Draw
-pub enum DrawType {
-    Static{ texture_id: u32 },
-    Dynamic{ texture_id: u32, layer: u32 }
-}
-
-/// If an entity is controlled
-#[derive(Component, Default)]
-#[storage(NullStorage)]
-pub struct Controlled;
-
-// Resources
-/// Stores delta time
-pub struct DeltaTime {
-    last: std::time::Instant,
-    delta: std::time::Duration
-}
-impl DeltaTime {
-    fn update(&mut self) {
-        let now = std::time::Instant::now();
-        self.delta = now - self.last;
-        self.last = now;
-    }
-}
-impl Default for DeltaTime {
-    fn default() -> DeltaTime {
-        DeltaTime{ last: std::time::Instant::now(), delta: std::time::Duration::new(0, 0) }
-    }
-}
-
-/// Stores current keyboard inputs
-#[derive(Default, Debug)]
-pub struct InputState {
-    pub up: bool,
-    pub down: bool,
-    pub left: bool,
-    pub right: bool,
-    pub action: bool
-}
-impl InputState {
-    pub fn new() -> InputState {
-        InputState {
-            up: false,
-            down: false,
-            left: false,
-            right: false,
-            action: false
+    impl Velocity {
+        pub fn new() -> Velocity {
+            Velocity {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            }
         }
     }
-}
 
-// Systems
+    /// Entity size on the tile
+    #[derive(Component)]
+    #[storage(VecStorage)]
+    pub struct Size {
+        // Overall size in world coordinates
+        pub width: f32,
+        pub height: f32,
+    }
+    impl Size {
+        pub fn default() -> Size {
+            Size { width: 10.0, height: 10.0 }
+        }
+        pub fn new(width: f32, height: f32) -> Size {
+            Size { width, height }
+        }
+    }
 
-/// Updates the animation frame given the elapsed system time and the objects frame rate
-pub struct AnimationSystem;
-impl<'a> System<'a> for AnimationSystem {
-    type SystemData = (WriteStorage<'a, Animation>, WriteStorage<'a, Draw>, Read<'a, DeltaTime>);
-
-    fn run(&mut self, (mut animation, mut draw, delta_time): Self::SystemData) {
-
-        for animation in (&mut animation).join() {
+    #[derive(Component)]
+    #[storage(VecStorage)]
+    pub struct Drawn {
+        pub program: u32,
+        pub attribute_array: u32,
+        pub vertex_buffer: u32,
+        pub texture_id: u32,
+        pub texture_coord_buffer: u32,
+    }
+    impl Drawn {
+        pub fn new(
+            program: u32,
+            texture_id: u32,
+            vertices: Vec<f32>,
+            texture_vertices: Vec<f32>,
+        ) -> Drawn {
             
-            animation.time_elapsed += delta_time.delta;
+            let attribute_array = gl_util::generate_buffer();
+            
+            let vertex_buffer = gl_util::generate_buffer();
+            gl_util::set_buffer_data(vertex_buffer, vertices);
 
-            // Check if the next frame should be displayed
-            if animation.time_elapsed.as_secs_f32() >= animation.animation_speed {
-                animation.current_frame += 1;
-    
-                // Set the frame back to 0 if the frame count exceeds its maximum
-                if animation.current_frame >= animation.total_frames {
-                    animation.current_frame = 0;
-                }
-    
-                // Reset the elapsed time counter
-                animation.time_elapsed = std::time::Duration::new(0, 0);
+            let texture_coord_buffer = gl_util::generate_buffer();
+            gl_util::set_buffer_data(texture_coord_buffer, texture_vertices);
+
+            // TODO: Bind vertex buffers to the attribute array
+
+            Drawn {
+                program,
+                attribute_array,
+                vertex_buffer,
+                texture_id,
+                texture_coord_buffer,
             }
         }
+    }
 
-        // Update the layer for dynamically drawn entities
-        for (animation, draw) in (&animation, &mut draw).join() {
-            match draw.draw_type {
-                DrawType::Dynamic{texture_id, layer} => draw.draw_type = DrawType::Dynamic{texture_id, layer: animation.current_frame},
-                _ => ()
+    /// Deteremines if an entity is animated
+    #[derive(Component)]
+    #[storage(VecStorage)]
+    pub struct Animate {
+        pub speed: std::time::Duration,
+        pub time_elapsed: std::time::Duration,
+        pub texture_coord_buffer: u32,
+        pub layer: usize,
+        pub layer_coordinates: Vec<Vec<f32>>,
+    }
+    impl Animate {
+        pub fn new(speed: f32, layer_coordinates: Vec<Vec<f32>>) -> Animate {
+
+            // TODO: Layer_coordinates should probably be a vector of vertex buffers for quick switching
+
+            Animate {
+                speed: std::time::Duration::from_secs_f32(speed),
+                time_elapsed: std::time::Duration::new(0, 0),
+                texture_coord_buffer: 0,
+                layer: 0,
+                layer_coordinates,
+            }
+        }
+    }
+
+    /// If an entity is controlled
+    #[derive(Component, Default)]
+    #[storage(NullStorage)]
+    pub struct Controlled;
+}
+
+/// ECS Resources
+mod resources {
+
+    /// Stores delta time
+    pub struct DeltaTime {
+        last: std::time::Instant,
+        pub delta: std::time::Duration,
+    }
+    impl DeltaTime {
+        pub fn update(&mut self) {
+            let now = std::time::Instant::now();
+            self.delta = now - self.last;
+            self.last = now;
+        }
+    }
+    impl Default for DeltaTime {
+        fn default() -> DeltaTime {
+            DeltaTime {
+                last: std::time::Instant::now(),
+                delta: std::time::Duration::new(0, 0),
+            }
+        }
+    }
+
+    /// Stores current keyboard inputs
+    #[derive(Default, Debug)]
+    pub struct InputState {
+        pub up: bool,
+        pub down: bool,
+        pub left: bool,
+        pub right: bool,
+        pub action: bool,
+    }
+    impl InputState {
+        pub fn new() -> InputState {
+            InputState {
+                up: false,
+                down: false,
+                left: false,
+                right: false,
+                action: false,
             }
         }
     }
 }
 
-/// Draws entities to the screen
-pub struct DrawSystem;
-impl<'a> System<'a> for DrawSystem {
-    type SystemData = (ReadStorage<'a, Draw>, ReadStorage<'a, Position>);
+/// Systems
+mod systems {
 
-    fn run(&mut self, (draw, position): Self::SystemData) {
+    use super::components::*;
+    use super::resources::*;
+    use specs::prelude::*;
 
-        unsafe {
-            gl::Clear(gl::COLOR_BUFFER_BIT);
-        };
+    /*
+    /// Updates the texture coordinates of an entity
+    pub struct AnimateSystem;
+    impl<'a> System<'a> for AnimateSystem {
+        type SystemData = (
+            WriteStorage<'a, Animate>,
+            WriteStorage<'a, Texture>,
+            Read<'a, DeltaTime>,
+        );
 
-        for (draw, position) in (&draw, &position).join() {
+        fn run(&mut self, (mut animate, mut texture, delta_time): Self::SystemData) {
+            // For every entity update its texture coordinates from its animation information
+            for (animate, texture) in (&mut animate, &mut texture).join() {
+                animate.time_elapsed += delta_time.delta;
 
-            let mut vertices = draw.vertices.clone();
+                // Check if the next layer should be displayed
+                if animate.time_elapsed >= animate.speed {
+                    animate.layer += 1;
 
-            vertices[0] += position.x as f32;
-            vertices[1] += position.y as f32;
+                    // Reset the layer count if necessary
+                    if animate.layer >= animate.layer_coordinates.len() {
+                        animate.layer = 0;
+                    }
 
-            vertices[5] += position.x as f32;
-            vertices[6] += position.y as f32;
+                    // Reset the elapsed time counter
+                    animate.time_elapsed = std::time::Duration::new(0, 0);
+                }
 
-            vertices[10] += position.x as f32;
-            vertices[11] += position.y as f32;
+                // Update the texture coordinates
+                texture.coordinates = animate.layer_coordinates[animate.layer];
+            }
+        }
+    }
+    */
 
-            vertices[15] += position.x as f32;
-            vertices[16] += position.y as f32;
+    /*
+    /// Draws entities to the screen
+    pub struct DrawSystem;
+    impl<'a> System<'a> for DrawSystem {
+        type SystemData = (ReadStorage<'a, Draw>, ReadStorage<'a, Position>);
 
-            vertices[20] += position.x as f32;
-            vertices[21] += position.y as f32;
-
-            vertices[25] += position.x as f32;
-            vertices[26] += position.y as f32;
-
-            // Update Vertex Information
+        fn run(&mut self, (draw, position): Self::SystemData) {
             unsafe {
-                gl::BindBuffer(gl::ARRAY_BUFFER, draw.vertex_buffer);
-                gl::BufferData(
-                    gl::ARRAY_BUFFER,
-                    (vertices.len() * std::mem::size_of::<f32>()) as gl::types::GLsizeiptr,
-                    vertices.as_ptr() as *const gl::types::GLvoid,
-                    gl::STATIC_DRAW
-                );
-                gl::BindBuffer(gl::ARRAY_BUFFER, 0);
+                gl::Clear(gl::COLOR_BUFFER_BIT);
             };
 
-            match draw.draw_type {
-                DrawType::Static{texture_id} => {
-                    unsafe {
-                        gl::UseProgram(draw.shader_program);
-                        gl::BindTexture(gl::TEXTURE_2D, texture_id);
-                        gl::DrawArrays(gl::TRIANGLES, 0, 6);
-                    };
-                },
-                DrawType::Dynamic{texture_id, layer} => {
-                    unsafe {
+            for (draw, position) in (&draw, &position).join() {
+                let mut vertices = draw.vertices.clone();
+
+                vertices[0] += position.x as f32;
+                vertices[1] += position.y as f32;
+
+                vertices[5] += position.x as f32;
+                vertices[6] += position.y as f32;
+
+                vertices[10] += position.x as f32;
+                vertices[11] += position.y as f32;
+
+                vertices[15] += position.x as f32;
+                vertices[16] += position.y as f32;
+
+                vertices[20] += position.x as f32;
+                vertices[21] += position.y as f32;
+
+                vertices[25] += position.x as f32;
+                vertices[26] += position.y as f32;
+
+                // Update Vertex Information
+                unsafe {
+                    gl::BindBuffer(gl::ARRAY_BUFFER, draw.vertex_buffer);
+                    gl::BufferData(
+                        gl::ARRAY_BUFFER,
+                        (vertices.len() * std::mem::size_of::<f32>()) as gl::types::GLsizeiptr,
+                        vertices.as_ptr() as *const gl::types::GLvoid,
+                        gl::STATIC_DRAW,
+                    );
+                    gl::BindBuffer(gl::ARRAY_BUFFER, 0);
+                };
+
+                match draw.draw_type {
+                    DrawType::Static { texture_id } => {
+                        unsafe {
+                            gl::UseProgram(draw.shader_program);
+                            gl::BindTexture(gl::TEXTURE_2D, texture_id);
+                            gl::DrawArrays(gl::TRIANGLES, 0, 6);
+                        };
+                    }
+                    DrawType::Dynamic { texture_id, layer } => unsafe {
                         gl::UseProgram(draw.shader_program);
                         gl::BindTexture(gl::TEXTURE_2D_ARRAY, texture_id);
-                        gl::Uniform1i(gl::GetUniformLocation(draw.shader_program, CString::new("layer").unwrap().as_ptr()), layer as i32);
+                        gl::Uniform1i(
+                            gl::GetUniformLocation(
+                                draw.shader_program,
+                                CString::new("layer").unwrap().as_ptr(),
+                            ),
+                            layer as i32,
+                        );
                         gl::DrawArrays(gl::TRIANGLES, 0, 6);
-                    }
+                    },
                 }
             }
         }
     }
-}
+    */
 
-/// Computes the delta time step
-pub struct TimeSystem;
-impl<'a> System<'a> for TimeSystem {
-    type SystemData = Write<'a, DeltaTime>;
+    /// Computes the delta time step
+    pub struct TimeSystem;
+    impl<'a> System<'a> for TimeSystem {
+        type SystemData = Write<'a, DeltaTime>;
 
-    fn run(&mut self, mut delta_time: Self::SystemData) {
-
-        delta_time.update();
-    }
-
-}
-
-/// Modifies entity velocity based on keyboard input
-pub struct ControlSystem;
-impl<'a> System<'a> for ControlSystem {
-    type SystemData = (WriteStorage<'a, Velocity>, ReadStorage<'a, Controlled>, Read<'a, InputState>);
-
-    fn run(&mut self, (mut velocity, controlled, input_state): Self::SystemData) {
-
-        let up = if input_state.up { 1.0 } else { 0.0 };        
-        let down = if input_state.down { -1.0 } else { 0.0 };        
-
-        let right = if input_state.right { 1.0 } else { 0.0 };        
-        let left = if input_state.left { -1.0 } else { 0.0 };        
-
-        for (velocity, _) in (&mut velocity, &controlled).join() {
-            velocity.x = right + left;
-            velocity.y = up + down;
+        fn run(&mut self, mut delta_time: Self::SystemData) {
+            delta_time.update();
         }
     }
-}
 
-/// Integrates position using velocity and delta time
-pub struct PhysicsSystem;
-impl<'a> System<'a> for PhysicsSystem {
-    type SystemData = (WriteStorage<'a, Position>, ReadStorage<'a, Velocity>, Read<'a, DeltaTime>);
+    /// Modifies entity velocity based on keyboard input
+    pub struct ControlSystem;
+    impl<'a> System<'a> for ControlSystem {
+        type SystemData = (
+            WriteStorage<'a, Velocity>,
+            ReadStorage<'a, Controlled>,
+            Read<'a, InputState>,
+        );
 
-    fn run(&mut self, (mut position, velocity, delta_time): Self::SystemData) {
+        fn run(&mut self, (mut velocity, controlled, input_state): Self::SystemData) {
+            let up = if input_state.up { 1.0 } else { 0.0 };
+            let down = if input_state.down { -1.0 } else { 0.0 };
 
-        let delta = delta_time.delta.as_secs_f64();
+            let right = if input_state.right { 1.0 } else { 0.0 };
+            let left = if input_state.left { -1.0 } else { 0.0 };
 
-        for (position, velocity) in (&mut position, &velocity).join() {
-            
-            position.x += velocity.x * delta;
-            position.y += velocity.y * delta;
-            position.z += velocity.z * delta;
+            for (velocity, _) in (&mut velocity, &controlled).join() {
+                velocity.x = right + left;
+                velocity.y = up + down;
+            }
+        }
+    }
+
+    /// Integrates position using velocity and delta time
+    pub struct PhysicsSystem;
+    impl<'a> System<'a> for PhysicsSystem {
+        type SystemData = (
+            WriteStorage<'a, Position>,
+            ReadStorage<'a, Velocity>,
+            Read<'a, DeltaTime>,
+        );
+
+        fn run(&mut self, (mut position, velocity, delta_time): Self::SystemData) {
+            let delta = delta_time.delta.as_secs_f64();
+
+            for (position, velocity) in (&mut position, &velocity).join() {
+                position.x += velocity.x * delta;
+                position.y += velocity.y * delta;
+                position.z += velocity.z * delta;
+            }
         }
     }
 }
