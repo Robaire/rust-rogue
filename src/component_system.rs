@@ -3,8 +3,8 @@ extern crate specs;
 
 // Components
 mod components {
-    use specs::{Component, NullStorage, VecStorage};
     use crate::gl_util;
+    use specs::{Component, NullStorage, VecStorage};
 
     /// Entity position in world coordinates
     #[derive(Component, Debug)]
@@ -12,14 +12,14 @@ mod components {
     pub struct Position {
         pub x: f64,
         pub y: f64,
-        pub z: f64,
+        pub z: f64
     }
     impl Position {
         pub fn new() -> Position {
             Position {
                 x: 0.0,
                 y: 0.0,
-                z: 0.0,
+                z: 0.0
             }
         }
     }
@@ -30,14 +30,14 @@ mod components {
     pub struct Velocity {
         pub x: f64,
         pub y: f64,
-        pub z: f64,
+        pub z: f64
     }
     impl Velocity {
         pub fn new() -> Velocity {
             Velocity {
                 x: 0.0,
                 y: 0.0,
-                z: 0.0,
+                z: 0.0
             }
         }
     }
@@ -48,11 +48,14 @@ mod components {
     pub struct Size {
         // Overall size in world coordinates
         pub width: f32,
-        pub height: f32,
+        pub height: f32
     }
     impl Size {
         pub fn default() -> Size {
-            Size { width: 10.0, height: 10.0 }
+            Size {
+                width: 10.0,
+                height: 10.0
+            }
         }
         pub fn new(width: f32, height: f32) -> Size {
             Size { width, height }
@@ -66,32 +69,32 @@ mod components {
         pub attribute_array: u32,
         pub vertex_buffer: u32,
         pub texture_id: u32,
-        pub texture_coord_buffer: u32,
+        pub texture_coord_buffer: u32
     }
     impl Drawn {
         pub fn new(
             program: u32,
             texture_id: u32,
             vertices: Vec<f32>,
-            texture_vertices: Vec<f32>,
+            texture_vertices: Vec<f32>
         ) -> Drawn {
-            
             let attribute_array = gl_util::generate_buffer();
-            
+            gl_util::bind_array(attribute_array);
+
             let vertex_buffer = gl_util::generate_buffer();
             gl_util::set_buffer_data(vertex_buffer, vertices);
+            gl_util::set_vertex_array_pointer(vertex_buffer, attribute_array, 0, 3);
 
             let texture_coord_buffer = gl_util::generate_buffer();
             gl_util::set_buffer_data(texture_coord_buffer, texture_vertices);
-
-            // TODO: Bind vertex buffers to the attribute array
+            gl_util::set_vertex_array_pointer(texture_coord_buffer, attribute_array, 1, 2);
 
             Drawn {
                 program,
                 attribute_array,
                 vertex_buffer,
                 texture_id,
-                texture_coord_buffer,
+                texture_coord_buffer
             }
         }
     }
@@ -102,21 +105,25 @@ mod components {
     pub struct Animate {
         pub speed: std::time::Duration,
         pub time_elapsed: std::time::Duration,
-        pub texture_coord_buffer: u32,
-        pub layer: usize,
-        pub layer_coordinates: Vec<Vec<f32>>,
+        pub layer: i32,
+        pub texture_coord_buffers: Vec<u32>
     }
     impl Animate {
         pub fn new(speed: f32, layer_coordinates: Vec<Vec<f32>>) -> Animate {
+            let mut texture_coord_buffers = Vec::new();
 
-            // TODO: Layer_coordinates should probably be a vector of vertex buffers for quick switching
+            for vertices in layer_coordinates {
+                let buffer = gl_util::generate_buffer();
+                gl_util::set_buffer_data(buffer, vertices);
+
+                texture_coord_buffers.push(buffer);
+            }
 
             Animate {
                 speed: std::time::Duration::from_secs_f32(speed),
                 time_elapsed: std::time::Duration::new(0, 0),
-                texture_coord_buffer: 0,
                 layer: 0,
-                layer_coordinates,
+                texture_coord_buffers
             }
         }
     }
@@ -133,7 +140,7 @@ mod resources {
     /// Stores delta time
     pub struct DeltaTime {
         last: std::time::Instant,
-        pub delta: std::time::Duration,
+        pub delta: std::time::Duration
     }
     impl DeltaTime {
         pub fn update(&mut self) {
@@ -146,7 +153,7 @@ mod resources {
         fn default() -> DeltaTime {
             DeltaTime {
                 last: std::time::Instant::now(),
-                delta: std::time::Duration::new(0, 0),
+                delta: std::time::Duration::new(0, 0)
             }
         }
     }
@@ -158,7 +165,7 @@ mod resources {
         pub down: bool,
         pub left: bool,
         pub right: bool,
-        pub action: bool,
+        pub action: bool
     }
     impl InputState {
         pub fn new() -> InputState {
@@ -167,7 +174,7 @@ mod resources {
                 down: false,
                 left: false,
                 right: false,
-                action: false,
+                action: false
             }
         }
     }
@@ -301,7 +308,7 @@ mod systems {
         type SystemData = (
             WriteStorage<'a, Velocity>,
             ReadStorage<'a, Controlled>,
-            Read<'a, InputState>,
+            Read<'a, InputState>
         );
 
         fn run(&mut self, (mut velocity, controlled, input_state): Self::SystemData) {
@@ -324,7 +331,7 @@ mod systems {
         type SystemData = (
             WriteStorage<'a, Position>,
             ReadStorage<'a, Velocity>,
-            Read<'a, DeltaTime>,
+            Read<'a, DeltaTime>
         );
 
         fn run(&mut self, (mut position, velocity, delta_time): Self::SystemData) {
