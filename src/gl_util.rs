@@ -1,3 +1,5 @@
+use std::ffi::CString;
+
 /// Generates a buffer on the GPU and returns its id
 pub fn generate_buffer() -> u32 {
     let mut id = 0;
@@ -15,7 +17,7 @@ pub fn generate_buffer() -> u32 {
 /// # Arguments
 /// * `id` - Buffer ID
 /// * `data` - Data to upload
-pub fn set_buffer_data(id: u32, data: Vec<f32>) {
+pub fn set_buffer_data(id: u32, data: &Vec<f32>) {
     unsafe {
         gl::BindBuffer(gl::ARRAY_BUFFER, id);
         gl::BufferData(
@@ -79,5 +81,42 @@ pub fn set_vertex_array_pointer(buffer: u32, id: u32, index: u32, size: i32) {
 
         gl::BindVertexArray(0);
         gl::BindBuffer(gl::ARRAY_BUFFER, 0);
+    }
+}
+
+/// Bind a texture
+/// # Arguments
+/// * `id` - Texture ID
+pub fn bind_texture(id: u32) {
+    unsafe {
+        gl::BindTexture(gl::TEXTURE_2D, id);
+    }
+}
+
+/// Set a shader program as used
+/// # Arugments
+/// * `id` - Shader Program ID
+pub fn use_program(id: u32) {
+    unsafe {
+        gl::UseProgram(id);
+    }
+}
+
+/// Draw Triangles
+/// # Arguments
+/// * `vertex_count` - Number of vertices to draw
+pub fn draw_triangles(vertex_count: u32) {
+    unsafe { gl::DrawArrays(gl::TRIANGLES, 0, vertex_count as i32) }
+}
+
+/// Set the value of a uniform
+/// # Arguments
+/// * `uniform` - The name of the uniform to copy data to
+/// * `program` - The shader program in use
+/// * `data` - Data to copy to the uniform
+pub fn set_uniform_float(uniform: &str, program: u32, data: &Vec<f32>) {
+    unsafe {
+        let location = gl::GetUniformLocation(program, CString::new(uniform).unwrap().as_ptr());
+        gl::Uniform3fv(location, 1, data.as_ptr());
     }
 }
