@@ -11,7 +11,6 @@ out vec2 texture_coordinate;
 
 void main() {
 
-    
     texture_coordinate = texture_vertex;
 
     // Scale the entity vertices by the entity size
@@ -21,5 +20,4 @@ void main() {
         0.0, 0.0, 1.0);
 
     gl_Position = projection * vec4((scale * entity_vertex) + position, 1.0);
-
 }
