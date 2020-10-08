@@ -2,7 +2,7 @@ extern crate nalgebra;
 extern crate specs;
 
 // Components
-mod components {
+pub mod components {
     use crate::gl_util;
     use specs::{Component, NullStorage, VecStorage};
 
@@ -10,9 +10,9 @@ mod components {
     #[derive(Component, Debug)]
     #[storage(VecStorage)]
     pub struct Position {
-        pub x: f64,
-        pub y: f64,
-        pub z: f64
+        pub x: f32,
+        pub y: f32,
+        pub z: f32
     }
     impl Position {
         pub fn new() -> Position {
@@ -22,15 +22,19 @@ mod components {
                 z: 0.0
             }
         }
+
+        pub fn as_vec(&self) -> Vec<f32> {
+            vec![self.x, self.y, self.z]
+        }
     }
 
     /// Entity velocity in world coordinates
     #[derive(Component)]
     #[storage(VecStorage)]
     pub struct Velocity {
-        pub x: f64,
-        pub y: f64,
-        pub z: f64
+        pub x: f32,
+        pub y: f32,
+        pub z: f32
     }
     impl Velocity {
         pub fn new() -> Velocity {
@@ -39,6 +43,10 @@ mod components {
                 y: 0.0,
                 z: 0.0
             }
+        }
+
+        pub fn as_vec(&self) -> Vec<f32> {
+            vec![self.x, self.y, self.z]
         }
     }
 
@@ -60,6 +68,10 @@ mod components {
         pub fn new(width: f32, height: f32) -> Size {
             Size { width, height }
         }
+
+        pub fn as_vec(&self) -> Vec<f32> {
+            vec![self.width, self.height]
+        }
     }
 
     #[derive(Component)]
@@ -68,6 +80,7 @@ mod components {
         pub program: u32,
         pub attribute_array: u32,
         pub vertex_buffer: u32,
+        pub vertex_count: u32,
         pub texture_id: u32,
         pub texture_coord_buffer: u32
     }
@@ -78,21 +91,24 @@ mod components {
             vertices: Vec<f32>,
             texture_vertices: Vec<f32>
         ) -> Drawn {
+            assert_eq!(vertices.len(), texture_vertices.len());
+
             let attribute_array = gl_util::generate_buffer();
             gl_util::bind_array(attribute_array);
 
             let vertex_buffer = gl_util::generate_buffer();
-            gl_util::set_buffer_data(vertex_buffer, vertices);
+            gl_util::set_buffer_data(vertex_buffer, &vertices);
             gl_util::set_vertex_array_pointer(vertex_buffer, attribute_array, 0, 3);
 
             let texture_coord_buffer = gl_util::generate_buffer();
-            gl_util::set_buffer_data(texture_coord_buffer, texture_vertices);
+            gl_util::set_buffer_data(texture_coord_buffer, &texture_vertices);
             gl_util::set_vertex_array_pointer(texture_coord_buffer, attribute_array, 1, 2);
 
             Drawn {
                 program,
                 attribute_array,
                 vertex_buffer,
+                vertex_count: vertices.len() as u32,
                 texture_id,
                 texture_coord_buffer
             }
@@ -105,7 +121,7 @@ mod components {
     pub struct Animate {
         pub speed: std::time::Duration,
         pub time_elapsed: std::time::Duration,
-        pub layer: i32,
+        pub layer: u32,
         pub texture_coord_buffers: Vec<u32>
     }
     impl Animate {
@@ -114,7 +130,7 @@ mod components {
 
             for vertices in layer_coordinates {
                 let buffer = gl_util::generate_buffer();
-                gl_util::set_buffer_data(buffer, vertices);
+                gl_util::set_buffer_data(buffer, &vertices);
 
                 texture_coord_buffers.push(buffer);
             }
@@ -135,7 +151,7 @@ mod components {
 }
 
 /// ECS Resources
-mod resources {
+pub mod resources {
 
     /// Stores delta time
     pub struct DeltaTime {
@@ -181,116 +197,71 @@ mod resources {
 }
 
 /// Systems
-mod systems {
+pub mod systems {
 
     use super::components::*;
     use super::resources::*;
+    use crate::gl_util;
     use specs::prelude::*;
 
-    /*
-    /// Updates the texture coordinates of an entity
-    pub struct AnimateSystem;
-    impl<'a> System<'a> for AnimateSystem {
-        type SystemData = (
-            WriteStorage<'a, Animate>,
-            WriteStorage<'a, Texture>,
-            Read<'a, DeltaTime>,
-        );
-
-        fn run(&mut self, (mut animate, mut texture, delta_time): Self::SystemData) {
-            // For every entity update its texture coordinates from its animation information
-            for (animate, texture) in (&mut animate, &mut texture).join() {
-                animate.time_elapsed += delta_time.delta;
-
-                // Check if the next layer should be displayed
-                if animate.time_elapsed >= animate.speed {
-                    animate.layer += 1;
-
-                    // Reset the layer count if necessary
-                    if animate.layer >= animate.layer_coordinates.len() {
-                        animate.layer = 0;
-                    }
-
-                    // Reset the elapsed time counter
-                    animate.time_elapsed = std::time::Duration::new(0, 0);
-                }
-
-                // Update the texture coordinates
-                texture.coordinates = animate.layer_coordinates[animate.layer];
-            }
-        }
-    }
-    */
-
-    /*
-    /// Draws entities to the screen
+    /// Draws an entity to the screen
     pub struct DrawSystem;
     impl<'a> System<'a> for DrawSystem {
-        type SystemData = (ReadStorage<'a, Draw>, ReadStorage<'a, Position>);
+        type SystemData = (
+            ReadStorage<'a, Drawn>,
+            ReadStorage<'a, Position>,
+            ReadStorage<'a, Size>
+        );
 
-        fn run(&mut self, (draw, position): Self::SystemData) {
+        fn run(&mut self, (drawn, position, size): Self::SystemData) {
             unsafe {
                 gl::Clear(gl::COLOR_BUFFER_BIT);
             };
 
-            for (draw, position) in (&draw, &position).join() {
-                let mut vertices = draw.vertices.clone();
+            for (drawn, position, size) in (&drawn, &position, &size).join() {
+                // Bind the requisite buffers
+                // TODO: I may have to reset the vertex attribute array pointer with the new buffer information
+                gl_util::bind_array(drawn.attribute_array);
+                gl_util::bind_buffer(drawn.vertex_buffer);
+                gl_util::bind_buffer(drawn.texture_coord_buffer);
+                gl_util::bind_texture(drawn.texture_id);
 
-                vertices[0] += position.x as f32;
-                vertices[1] += position.y as f32;
+                // Update layout information
+                gl_util::set_uniform_float("position", drawn.program, &position.as_vec());
+                gl_util::set_uniform_float("size", drawn.program, &size.as_vec());
 
-                vertices[5] += position.x as f32;
-                vertices[6] += position.y as f32;
+                // Issue the draw call
+                gl_util::draw_triangles(drawn.vertex_count);
+            }
+        }
+    }
 
-                vertices[10] += position.x as f32;
-                vertices[11] += position.y as f32;
+    /// Updates texture coordinates
+    pub struct AnimateSystem;
+    impl<'a> System<'a> for AnimateSystem {
+        type SystemData = (
+            WriteStorage<'a, Animate>,
+            ReadStorage<'a, Drawn>,
+            Read<'a, DeltaTime>
+        );
 
-                vertices[15] += position.x as f32;
-                vertices[16] += position.y as f32;
+        fn run(&mut self, (mut animate, drawn, delta_time): Self::SystemData) {
+            for (animate, drawn) in (&mut animate, &drawn).join() {
+                animate.time_elapsed += delta_time.delta;
 
-                vertices[20] += position.x as f32;
-                vertices[21] += position.y as f32;
+                if animate.time_elapsed >= animate.speed {
+                    animate.time_elapsed = std::time::Duration::new(0, 0);
+                    animate.layer += 1;
 
-                vertices[25] += position.x as f32;
-                vertices[26] += position.y as f32;
-
-                // Update Vertex Information
-                unsafe {
-                    gl::BindBuffer(gl::ARRAY_BUFFER, draw.vertex_buffer);
-                    gl::BufferData(
-                        gl::ARRAY_BUFFER,
-                        (vertices.len() * std::mem::size_of::<f32>()) as gl::types::GLsizeiptr,
-                        vertices.as_ptr() as *const gl::types::GLvoid,
-                        gl::STATIC_DRAW,
-                    );
-                    gl::BindBuffer(gl::ARRAY_BUFFER, 0);
-                };
-
-                match draw.draw_type {
-                    DrawType::Static { texture_id } => {
-                        unsafe {
-                            gl::UseProgram(draw.shader_program);
-                            gl::BindTexture(gl::TEXTURE_2D, texture_id);
-                            gl::DrawArrays(gl::TRIANGLES, 0, 6);
-                        };
+                    if animate.layer >= animate.texture_coord_buffers.len() as u32 {
+                        animate.layer = 0;
                     }
-                    DrawType::Dynamic { texture_id, layer } => unsafe {
-                        gl::UseProgram(draw.shader_program);
-                        gl::BindTexture(gl::TEXTURE_2D_ARRAY, texture_id);
-                        gl::Uniform1i(
-                            gl::GetUniformLocation(
-                                draw.shader_program,
-                                CString::new("layer").unwrap().as_ptr(),
-                            ),
-                            layer as i32,
-                        );
-                        gl::DrawArrays(gl::TRIANGLES, 0, 6);
-                    },
+
+                    // TODO: Implement animations
                 }
             }
         }
     }
-    */
 
     /// Computes the delta time step
     pub struct TimeSystem;
@@ -335,7 +306,7 @@ mod systems {
         );
 
         fn run(&mut self, (mut position, velocity, delta_time): Self::SystemData) {
-            let delta = delta_time.delta.as_secs_f64();
+            let delta = delta_time.delta.as_secs_f32();
 
             for (position, velocity) in (&mut position, &velocity).join() {
                 position.x += velocity.x * delta;
