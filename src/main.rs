@@ -10,8 +10,6 @@ pub mod shader;
 use shader::{Program, Shader};
 
 pub mod component_system;
-use component_system::*;
-
 pub mod gl_util;
 
 extern crate specs;
@@ -27,13 +25,13 @@ fn init_sdl() -> (sdl2::Sdl, sdl2::video::Window, sdl2::video::GLContext) {
     // Initialize SDL
     let sdl_context = match sdl2::init() {
         Ok(context) => context,
-        Err(message) => panic!(format!("SDL Init Failed: {}", message)),
+        Err(message) => panic!(format!("SDL Init Failed: {}", message))
     };
 
     // Ask SDL to initialize the vide system
     let video_subsystem = match sdl_context.video() {
         Ok(video_subsystem) => video_subsystem,
-        Err(message) => panic!(format!("Failed to create video subsystem: {}", message)),
+        Err(message) => panic!(format!("Failed to create video subsystem: {}", message))
     };
 
     // Set the attributes of the OpenGL Context
@@ -51,13 +49,13 @@ fn init_sdl() -> (sdl2::Sdl, sdl2::video::Window, sdl2::video::GLContext) {
         .build()
     {
         Ok(window) => window,
-        Err(message) => panic!(format!("Failed to create window: {}", message)),
+        Err(message) => panic!(format!("Failed to create window: {}", message))
     };
 
     // Create the OpenGL Context
     let gl_context = match window.gl_create_context() {
         Ok(context) => context,
-        Err(message) => panic!(format!("Failed to create OpenGL Context: {}", message)),
+        Err(message) => panic!(format!("Failed to create OpenGL Context: {}", message))
     };
 
     // Load the OpenGL Functions
@@ -67,52 +65,49 @@ fn init_sdl() -> (sdl2::Sdl, sdl2::video::Window, sdl2::video::GLContext) {
 }
 
 fn setup_ecs<'a>() -> (specs::World, specs::Dispatcher<'a, 'a>) {
+    use component_system::*;
+
     // Create the world
     let mut world = World::new();
 
     // Register Components
-    world.register::<Position>();
-    world.register::<Velocity>();
-    world.register::<Controlled>();
-    world.register::<Animation>();
-    world.register::<Draw>();
+    world.register::<components::Position>();
+    world.register::<components::Velocity>();
+    world.register::<components::Size>();
+    world.register::<components::Controlled>();
+    world.register::<components::Animate>();
+    world.register::<components::Drawn>();
 
     // Insert Resources
-    world.insert(DeltaTime::default());
-    world.insert(InputState::new());
+    world.insert(resources::DeltaTime::default());
+    world.insert(resources::InputState::new());
 
     // Create the dispatcher
     let dispatcher = DispatcherBuilder::new()
         // Add parallel systems
-        .with(TimeSystem, "TimeSystem", &[])
-        .with(ControlSystem, "ControlSystem", &["TimeSystem"])
-        .with(PhysicsSystem, "PhysicsSystem", &["ControlSystem"])
-        .with(AnimationSystem, "AnimationSystem", &["TimeSystem"])
+        .with(systems::TimeSystem, "TimeSystem", &[])
+        .with(systems::ControlSystem, "ControlSystem", &["TimeSystem"])
+        .with(systems::PhysicsSystem, "PhysicsSystem", &["ControlSystem"])
+        .with(systems::AnimateSystem, "AnimationSystem", &["TimeSystem"])
         // Add serial systems
-        .with_thread_local(DrawSystem)
+        .with_thread_local(systems::DrawSystem)
         .build();
 
     (world, dispatcher)
 }
 
-fn main() {
-    // Initialize SDL and create a window
-    let (sdl_context, window, _gl_context) = init_sdl();
-
-    // Setup the ECS
-    let (mut world, mut dispatcher) = setup_ecs();
-
+fn create_shader_program() -> Program {
     // Load shaders
-    let vertex_shader = match Shader::new_from_file("./src/shaders/vertex.vert", gl::VERTEX_SHADER)
+    let vertex_shader = match Shader::new_from_file("./src/shaders/entity.vert", gl::VERTEX_SHADER)
     {
         Ok(shader) => shader,
-        Err(message) => panic!(format!("Failed to create vertex shader: {}", message)),
+        Err(message) => panic!(format!("Failed to create vertex shader: {}", message))
     };
 
     let fragment_shader =
-        match Shader::new_from_file("./src/shaders/animation.frag", gl::FRAGMENT_SHADER) {
+        match Shader::new_from_file("./src/shaders/entity.frag", gl::FRAGMENT_SHADER) {
             Ok(shader) => shader,
-            Err(message) => panic!(format!("Failed to create fragment shader: {}", message)),
+            Err(message) => panic!(format!("Failed to create fragment shader: {}", message))
         };
 
     // Create shader program
@@ -122,17 +117,30 @@ fn main() {
         .link()
     {
         Ok(program) => program,
-        Err(message) => panic!(format!("Failed to create shader program: {}", message)),
+        Err(message) => panic!(format!("Failed to create shader program: {}", message))
     };
 
     // Use shader program
     shader_program.set_used();
 
+    return shader_program;
+}
+
+fn main() {
+    // Initialize SDL and create a window
+    let (sdl_context, window, _gl_context) = init_sdl();
+
+    // Setup the ECS
+    let (mut world, mut dispatcher) = setup_ecs();
+
+    // Create the shader program
+    let shader_program = create_shader_program();
+
     // Set the projection matrix
     let projection_id = unsafe {
         gl::GetUniformLocation(
             shader_program.id,
-            CString::new("projection").unwrap().as_ptr(),
+            CString::new("projection").unwrap().as_ptr()
         )
     };
 
@@ -145,49 +153,7 @@ fn main() {
             projection_id,
             1,
             gl::FALSE,
-            projection.to_homogeneous().as_slice().as_ptr(),
-        );
-    };
-
-    // Load shaders
-    let fragment_shader =
-        match Shader::new_from_file("./src/shaders/static.frag", gl::FRAGMENT_SHADER) {
-            Ok(shader) => shader,
-            Err(message) => panic!(format!("Failed to create fragment shader: {}", message)),
-        };
-
-    // Create shader program
-    let static_shader_program = match Program::new()
-        .attach_shader(&vertex_shader)
-        .attach_shader(&fragment_shader)
-        .link()
-    {
-        Ok(program) => program,
-        Err(message) => panic!(format!("Failed to create shader program: {}", message)),
-    };
-
-    // Use shader program
-    static_shader_program.set_used();
-
-    // Set the projection matrix
-    let static_projection_id = unsafe {
-        gl::GetUniformLocation(
-            static_shader_program.id,
-            CString::new("projection").unwrap().as_ptr(),
-        )
-    };
-    println!("{}", projection_id);
-
-    let aspect = 1.0;
-    let projection = Orthographic3::new(-aspect, aspect, -1.0, 1.0, -1.0, 1.0);
-
-    // Write the projection to the gpu
-    unsafe {
-        gl::UniformMatrix4fv(
-            static_projection_id,
-            1,
-            gl::FALSE,
-            projection.to_homogeneous().as_slice().as_ptr(),
+            projection.to_homogeneous().as_slice().as_ptr()
         );
     };
 
@@ -216,7 +182,7 @@ fn main() {
             gl::ARRAY_BUFFER,
             (square_vertices.len() * std::mem::size_of::<f32>()) as gl::types::GLsizeiptr,
             square_vertices.as_ptr() as *const gl::types::GLvoid,
-            gl::STATIC_DRAW,
+            gl::STATIC_DRAW
         );
         gl::BindBuffer(gl::ARRAY_BUFFER, 0);
     };
@@ -239,7 +205,7 @@ fn main() {
             gl::FLOAT,
             gl::FALSE,
             (5 * std::mem::size_of::<f32>()) as gl::types::GLint,
-            std::ptr::null(),
+            std::ptr::null()
         );
 
         let offset = 3;
@@ -249,14 +215,14 @@ fn main() {
             gl::FLOAT,
             gl::FALSE,
             (5 * std::mem::size_of::<f32>()) as gl::types::GLint,
-            (offset * std::mem::size_of::<f32>()) as *const std::ffi::c_void,
+            (offset * std::mem::size_of::<f32>()) as *const std::ffi::c_void
         );
     };
 
     // Load the animation as a texture array
     let idle_animation = match image::open("./src/animations/ogre_idle_animation.png") {
         Ok(image) => image.flipv().into_rgba(),
-        Err(message) => panic!(format!("Image could not be loaded: {}", message)),
+        Err(message) => panic!(format!("Image could not be loaded: {}", message))
     };
 
     // Create a texture array and store image data in it
@@ -282,7 +248,7 @@ fn main() {
             1,
             gl::RGBA,
             gl::UNSIGNED_BYTE,
-            idle_animation.as_ptr() as *const gl::types::GLvoid,
+            idle_animation.as_ptr() as *const gl::types::GLvoid
         );
 
         gl::PixelStorei(gl::UNPACK_SKIP_PIXELS, 22);
@@ -297,7 +263,7 @@ fn main() {
             1,
             gl::RGBA,
             gl::UNSIGNED_BYTE,
-            idle_animation.as_ptr() as *const gl::types::GLvoid,
+            idle_animation.as_ptr() as *const gl::types::GLvoid
         );
 
         gl::PixelStorei(gl::UNPACK_SKIP_PIXELS, 44);
@@ -312,7 +278,7 @@ fn main() {
             1,
             gl::RGBA,
             gl::UNSIGNED_BYTE,
-            idle_animation.as_ptr() as *const gl::types::GLvoid,
+            idle_animation.as_ptr() as *const gl::types::GLvoid
         );
 
         gl::PixelStorei(gl::UNPACK_SKIP_PIXELS, 66);
@@ -327,27 +293,25 @@ fn main() {
             1,
             gl::RGBA,
             gl::UNSIGNED_BYTE,
-            idle_animation.as_ptr() as *const gl::types::GLvoid,
+            idle_animation.as_ptr() as *const gl::types::GLvoid
         );
 
         gl::TexParameteri(
             gl::TEXTURE_2D_ARRAY,
             gl::TEXTURE_MAG_FILTER,
-            gl::NEAREST as i32,
+            gl::NEAREST as i32
         );
         gl::TexParameteri(
             gl::TEXTURE_2D_ARRAY,
             gl::TEXTURE_MIN_FILTER,
-            gl::LINEAR as i32,
+            gl::LINEAR as i32
         );
     };
-
-    static_shader_program.set_used();
 
     // Load the Image
     let image = match image::open("./src/frames/chest_empty_open_anim_f0.png") {
         Ok(image) => image.flipv().into_rgba(),
-        Err(message) => panic!(format!("Image could not be loaded: {}", message)),
+        Err(message) => panic!(format!("Image could not be loaded: {}", message))
     };
 
     // Create a texture
@@ -370,7 +334,7 @@ fn main() {
             0,
             gl::RGBA,
             gl::UNSIGNED_BYTE,
-            image.into_raw().as_ptr() as *const gl::types::GLvoid,
+            image.into_raw().as_ptr() as *const gl::types::GLvoid
         );
         gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
         gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as i32);
@@ -387,6 +351,7 @@ fn main() {
         gl::Clear(gl::COLOR_BUFFER_BIT);
     };
 
+    /*
     // Create entities in the world
     let player = world
         .create_entity()
@@ -400,8 +365,8 @@ fn main() {
             square_vertices.clone(),
             DrawType::Dynamic {
                 texture_id: texture_array_id,
-                layer: 0,
-            },
+                layer: 0
+            }
         ))
         .build();
 
@@ -413,10 +378,11 @@ fn main() {
             square_vbo,
             small_square_vertices.clone(),
             DrawType::Static {
-                texture_id: chest_texture_id,
-            },
+                texture_id: chest_texture_id
+            }
         ))
         .build();
+    */
 
     // Enter the main event loop
     let mut event_pump = sdl_context.event_pump().unwrap();
@@ -426,7 +392,7 @@ fn main() {
             match event {
                 Event::KeyDown {
                     keycode: Some(key), ..
-                } => {}
+                } => {},
                 Event::MouseButtonDown {
                     mouse_btn: button,
                     x,
@@ -447,15 +413,7 @@ fn main() {
                             projection_id,
                             1,
                             gl::FALSE,
-                            projection.to_homogeneous().as_slice().as_ptr(),
-                        );
-
-                        static_shader_program.set_used();
-                        gl::UniformMatrix4fv(
-                            static_projection_id,
-                            1,
-                            gl::FALSE,
-                            projection.to_homogeneous().as_slice().as_ptr(),
+                            projection.to_homogeneous().as_slice().as_ptr()
                         );
                     },
                     _ => {}
@@ -467,6 +425,7 @@ fn main() {
 
         // Update Input State
         {
+            use component_system::resources::InputState;
             let mut input_state = world.write_resource::<InputState>();
             input_state.up = event_pump.keyboard_state().is_scancode_pressed(Scancode::W);
             input_state.down = event_pump.keyboard_state().is_scancode_pressed(Scancode::S);
