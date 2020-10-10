@@ -91,8 +91,6 @@ pub mod components {
             vertices: Vec<f32>,
             texture_vertices: Vec<f32>
         ) -> Drawn {
-            assert_eq!(vertices.len(), texture_vertices.len());
-
             let attribute_array = gl_util::generate_buffer();
             gl_util::bind_array(attribute_array);
 
