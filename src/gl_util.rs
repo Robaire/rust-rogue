@@ -84,6 +84,19 @@ pub fn set_vertex_array_pointer(buffer: u32, id: u32, index: u32, size: i32) {
     }
 }
 
+/// Generate a texture buffer
+pub fn generate_texture() -> u32 {
+    let mut id = 0;
+
+    unsafe {
+        gl::GenTextures(1, &mut id);
+    };
+
+    assert_ne!(id, 0);
+
+    return id;
+}
+
 /// Bind a texture
 /// # Arguments
 /// * `id` - Texture ID
