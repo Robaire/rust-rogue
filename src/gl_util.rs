@@ -1,4 +1,5 @@
 use std::ffi::CString;
+extern crate image;
 
 /// Generates a buffer on the GPU and returns its id
 pub fn generate_buffer() -> u32 {
@@ -104,6 +105,46 @@ pub fn bind_texture(id: u32) {
     unsafe {
         gl::BindTexture(gl::TEXTURE_2D, id);
     }
+}
+
+/// Set texture data
+/// # Arguments
+/// * `id` - Texture ID
+/// * `texture` - Texture Data
+pub fn set_texture(id: u32, texture: image::ImageBuffer<image::Rgba<u8>, std::vec::Vec<u8>>) {
+    unsafe {
+        gl::BindTexture(gl::TEXTURE_2D, id);
+        gl::TexImage2D(
+            gl::TEXTURE_2D,
+            0,
+            gl::RGBA8 as i32,
+            texture.width() as i32,
+            texture.height() as i32,
+            0,
+            gl::RGBA,
+            gl::UNSIGNED_BYTE,
+            texture.as_ptr() as *const gl::types::GLvoid
+        );
+        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
+        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as i32);
+    }
+}
+
+/// Set texture data directly from a file
+/// # Arguments
+/// * `file` - File path
+pub fn create_texture_from_file(file: &str) -> u32 {
+    // Try to load the texture
+    let texture = match image::open(file) {
+        Ok(image) => image.flipv().into_rgba(),
+        Err(message) => panic!("Image could not be loaded: {}", message)
+    };
+
+    // Create a texture and set the image data
+    let id = generate_texture();
+    set_texture(id, texture);
+
+    return id;
 }
 
 /// Set a shader program as used
