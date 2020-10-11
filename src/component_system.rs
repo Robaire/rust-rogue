@@ -22,6 +22,9 @@ pub mod components {
                 z: 0.0
             }
         }
+        pub fn new_xyz(x: f32, y: f32, z: f32) -> Position {
+            Position { x, y, z }
+        }
 
         pub fn as_vec(&self) -> Vec<f32> {
             vec![self.x, self.y, self.z]
@@ -91,7 +94,11 @@ pub mod components {
             vertices: Vec<f32>,
             texture_vertices: Vec<f32>
         ) -> Drawn {
-            let attribute_array = gl_util::generate_buffer();
+            unsafe {
+                gl::UseProgram(program);
+            }
+
+            let attribute_array = gl_util::generate_vertex_array();
             gl_util::bind_array(attribute_array);
 
             let vertex_buffer = gl_util::generate_buffer();
@@ -217,19 +224,19 @@ pub mod systems {
             };
 
             for (drawn, position, size) in (&drawn, &position, &size).join() {
-                // Bind the requisite buffers
-                // TODO: I may have to reset the vertex attribute array pointer with the new buffer information
+                unsafe {
+                    gl::UseProgram(drawn.program);
+                }
+
                 gl_util::bind_array(drawn.attribute_array);
-                gl_util::bind_buffer(drawn.vertex_buffer);
-                gl_util::bind_buffer(drawn.texture_coord_buffer);
                 gl_util::bind_texture(drawn.texture_id);
 
                 // Update layout information
-                gl_util::set_uniform_float("position", drawn.program, &position.as_vec());
-                gl_util::set_uniform_float("size", drawn.program, &size.as_vec());
+                gl_util::set_uniform_float_vec3("position", drawn.program, &position.as_vec());
+                gl_util::set_uniform_float_vec2("size", drawn.program, &size.as_vec());
 
                 // Issue the draw call
-                gl_util::draw_triangles(drawn.vertex_count);
+                gl_util::draw_triangles(drawn.vertex_count / 3);
             }
         }
     }
