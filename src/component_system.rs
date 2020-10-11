@@ -262,7 +262,13 @@ pub mod systems {
                         animate.layer = 0;
                     }
 
-                    // TODO: Implement animations
+                    gl_util::set_vertex_array_pointer(
+                        animate.texture_coord_buffers[animate.layer as usize], 
+                        drawn.attribute_array, 
+                        1, 
+                        2
+                    );
+
                 }
             }
         }
