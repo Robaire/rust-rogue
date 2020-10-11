@@ -129,14 +129,10 @@ fn create_shader_program() -> Program {
 fn create_entity(world: &mut specs::World, program: u32) {
     use component_system::components::*;
 
-    let mut vertices: Vec<f32> = vec![
+    let vertices: Vec<f32> = vec![
         -1.0, -1.0, 0.0, 1.0, 1.0, 0.0, -1.0, 1.0, 0.0, -1.0, -1.0, 0.0, 1.0, -1.0, 0.0, 1.0, 1.0,
         0.0,
     ];
-
-    for vertex in &mut vertices {
-        *vertex *= 0.3;
-    }
 
     let texture_vertices: Vec<f32> =
         vec![0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0];
@@ -161,23 +157,17 @@ fn create_entity(world: &mut specs::World, program: u32) {
             gl::UNSIGNED_BYTE,
             texture.as_ptr() as *const gl::types::GLvoid
         );
-        gl::TexParameteri(
-            gl::TEXTURE_2D_ARRAY,
-            gl::TEXTURE_MAG_FILTER,
-            gl::NEAREST as i32
-        );
-        gl::TexParameteri(
-            gl::TEXTURE_2D_ARRAY,
-            gl::TEXTURE_MIN_FILTER,
-            gl::LINEAR as i32
-        );
+        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
+        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as i32);
     }
 
     // Create an entity
     world
         .create_entity()
-        .with(Position::new())
-        .with(Size::default())
+        .with(Position::new_xyz(0.0, 0.0, 0.0))
+        .with(Velocity::new())
+        .with(Controlled)
+        .with(Size::new(0.3, 0.3))
         .with(Drawn::new(program, texture_id, vertices, texture_vertices))
         .build();
 }
@@ -191,6 +181,9 @@ fn main() {
 
     // Create the shader program
     let shader_program = create_shader_program();
+
+    // Add entities to the world
+    create_entity(&mut world, shader_program.id);
 
     // Set the projection matrix
     let projection_id = unsafe {
@@ -213,191 +206,6 @@ fn main() {
         );
     };
 
-    create_entity(&mut world, shader_program.id);
-
-    // // Create Square
-    // let square_vertices: Vec<f32> = vec![
-    //     -0.3, -0.3, 0.0, 0.0, 0.0, 0.3, 0.3, 0.0, 1.0, 1.0, -0.3, 0.3, 0.0, 0.0, 1.0, -0.3, -0.3,
-    //     0.0, 0.0, 0.0, 0.3, -0.3, 0.0, 1.0, 0.0, 0.3, 0.3, 0.0, 1.0, 1.0,
-    // ];
-
-    // // Create Square
-    // let small_square_vertices: Vec<f32> = vec![
-    //     -0.1, -0.1, 0.0, 0.0, 0.0, 0.1, 0.1, 0.0, 1.0, 1.0, -0.1, 0.1, 0.0, 0.0, 1.0, -0.1, -0.1,
-    //     0.0, 0.0, 0.0, 0.1, -0.1, 0.0, 1.0, 0.0, 0.1, 0.1, 0.0, 1.0, 1.0,
-    // ];
-
-    // // Create a vertex buffer
-    // let mut square_vbo = 0;
-    // unsafe {
-    //     gl::GenBuffers(1, &mut square_vbo);
-    // };
-
-    // // Copy Vertex Data into the buffer
-    // unsafe {
-    //     gl::BindBuffer(gl::ARRAY_BUFFER, square_vbo);
-    //     gl::BufferData(
-    //         gl::ARRAY_BUFFER,
-    //         (square_vertices.len() * std::mem::size_of::<f32>()) as gl::types::GLsizeiptr,
-    //         square_vertices.as_ptr() as *const gl::types::GLvoid,
-    //         gl::STATIC_DRAW
-    //     );
-    //     gl::BindBuffer(gl::ARRAY_BUFFER, 0);
-    // };
-
-    // // Create the vertex array and bind pointers to buffer information
-    // let mut vao = 0;
-    // unsafe {
-    //     gl::GenVertexArrays(1, &mut vao);
-    // };
-    // unsafe {
-    //     gl::BindVertexArray(vao);
-    //     gl::BindBuffer(gl::ARRAY_BUFFER, square_vbo);
-
-    //     gl::EnableVertexAttribArray(0);
-    //     gl::EnableVertexAttribArray(1);
-
-    //     gl::VertexAttribPointer(
-    //         0,
-    //         3,
-    //         gl::FLOAT,
-    //         gl::FALSE,
-    //         (5 * std::mem::size_of::<f32>()) as gl::types::GLint,
-    //         std::ptr::null()
-    //     );
-
-    //     let offset = 3;
-    //     gl::VertexAttribPointer(
-    //         1,
-    //         2,
-    //         gl::FLOAT,
-    //         gl::FALSE,
-    //         (5 * std::mem::size_of::<f32>()) as gl::types::GLint,
-    //         (offset * std::mem::size_of::<f32>()) as *const std::ffi::c_void
-    //     );
-    // };
-
-    // // Load the animation as a texture array
-    // let idle_animation = match image::open("./src/animations/ogre_idle_animation.png") {
-    //     Ok(image) => image.flipv().into_rgba(),
-    //     Err(message) => panic!(format!("Image could not be loaded: {}", message))
-    // };
-
-    // // Create a texture array and store image data in it
-    // let mut texture_array_id = 0;
-
-    // unsafe {
-    //     gl::GenTextures(1, &mut texture_array_id);
-    //     gl::BindTexture(gl::TEXTURE_2D_ARRAY, texture_array_id);
-    //     gl::TexStorage3D(gl::TEXTURE_2D_ARRAY, 1, gl::RGBA8, 22, 28, 4);
-
-    //     gl::PixelStorei(gl::UNPACK_ROW_LENGTH, 22 * 4);
-    //     gl::PixelStorei(gl::UNPACK_IMAGE_HEIGHT, 28);
-
-    //     gl::PixelStorei(gl::UNPACK_SKIP_PIXELS, 0);
-    //     gl::TexSubImage3D(
-    //         gl::TEXTURE_2D_ARRAY,
-    //         0,
-    //         0,
-    //         0,
-    //         0,
-    //         22,
-    //         28,
-    //         1,
-    //         gl::RGBA,
-    //         gl::UNSIGNED_BYTE,
-    //         idle_animation.as_ptr() as *const gl::types::GLvoid
-    //     );
-
-    //     gl::PixelStorei(gl::UNPACK_SKIP_PIXELS, 22);
-    //     gl::TexSubImage3D(
-    //         gl::TEXTURE_2D_ARRAY,
-    //         0,
-    //         0,
-    //         0,
-    //         1,
-    //         22,
-    //         28,
-    //         1,
-    //         gl::RGBA,
-    //         gl::UNSIGNED_BYTE,
-    //         idle_animation.as_ptr() as *const gl::types::GLvoid
-    //     );
-
-    //     gl::PixelStorei(gl::UNPACK_SKIP_PIXELS, 44);
-    //     gl::TexSubImage3D(
-    //         gl::TEXTURE_2D_ARRAY,
-    //         0,
-    //         0,
-    //         0,
-    //         2,
-    //         22,
-    //         28,
-    //         1,
-    //         gl::RGBA,
-    //         gl::UNSIGNED_BYTE,
-    //         idle_animation.as_ptr() as *const gl::types::GLvoid
-    //     );
-
-    //     gl::PixelStorei(gl::UNPACK_SKIP_PIXELS, 66);
-    //     gl::TexSubImage3D(
-    //         gl::TEXTURE_2D_ARRAY,
-    //         0,
-    //         0,
-    //         0,
-    //         3,
-    //         22,
-    //         28,
-    //         1,
-    //         gl::RGBA,
-    //         gl::UNSIGNED_BYTE,
-    //         idle_animation.as_ptr() as *const gl::types::GLvoid
-    //     );
-
-    //     gl::TexParameteri(
-    //         gl::TEXTURE_2D_ARRAY,
-    //         gl::TEXTURE_MAG_FILTER,
-    //         gl::NEAREST as i32
-    //     );
-    //     gl::TexParameteri(
-    //         gl::TEXTURE_2D_ARRAY,
-    //         gl::TEXTURE_MIN_FILTER,
-    //         gl::LINEAR as i32
-    //     );
-    // };
-
-    // // Load the Image
-    // let image = match image::open("./src/frames/chest_empty_open_anim_f0.png") {
-    //     Ok(image) => image.flipv().into_rgba(),
-    //     Err(message) => panic!(format!("Image could not be loaded: {}", message))
-    // };
-
-    // // Create a texture
-    // let mut chest_texture_id = 0;
-    // unsafe {
-    //     gl::GenTextures(1, &mut chest_texture_id);
-    // };
-
-    // // Give the texture image data
-    // unsafe {
-    //     gl::PixelStorei(gl::UNPACK_ROW_LENGTH, 0);
-    //     gl::PixelStorei(gl::UNPACK_SKIP_PIXELS, 0);
-    //     gl::BindTexture(gl::TEXTURE_2D, chest_texture_id);
-    //     gl::TexImage2D(
-    //         gl::TEXTURE_2D,
-    //         0,
-    //         gl::RGBA8 as i32,
-    //         image.width() as i32,
-    //         image.height() as i32,
-    //         0,
-    //         gl::RGBA,
-    //         gl::UNSIGNED_BYTE,
-    //         image.into_raw().as_ptr() as *const gl::types::GLvoid
-    //     );
-    //     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
-    //     gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as i32);
-    // };
-
     // Last Bit
     unsafe {
         gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
@@ -408,39 +216,6 @@ fn main() {
         gl::ClearColor(0.3, 0.3, 0.5, 1.0);
         gl::Clear(gl::COLOR_BUFFER_BIT);
     };
-
-    /*
-    // Create entities in the world
-    let player = world
-        .create_entity()
-        .with(Position::new())
-        .with(Velocity::new())
-        .with(Controlled)
-        .with(Animation::new(4))
-        .with(Draw::new(
-            shader_program.id,
-            square_vbo,
-            square_vertices.clone(),
-            DrawType::Dynamic {
-                texture_id: texture_array_id,
-                layer: 0
-            }
-        ))
-        .build();
-
-    let chest = world
-        .create_entity()
-        .with(Position::new())
-        .with(Draw::new(
-            static_shader_program.id,
-            square_vbo,
-            small_square_vertices.clone(),
-            DrawType::Static {
-                texture_id: chest_texture_id
-            }
-        ))
-        .build();
-    */
 
     // Enter the main event loop
     let mut event_pump = sdl_context.event_pump().unwrap();
