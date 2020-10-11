@@ -128,21 +128,15 @@ fn create_shader_program() -> Program {
 
 /// Creates a rectangle normalized to (-1, 1)
 fn create_rectangle(width: f32, height: f32) -> Vec<f32> {
-
     let aspect_ratio = width / height;
 
     // Start with the vertices arranged as a square
     let mut vertices: Vec<f32> = vec![
-        -1.0, -1.0, 0.0, 
-        1.0, 1.0, 0.0, 
-        -1.0, 1.0, 0.0, 
-        -1.0, -1.0, 0.0, 
-        1.0, -1.0, 0.0, 
-        1.0, 1.0, 0.0,
+        -1.0, -1.0, 0.0, 1.0, 1.0, 0.0, -1.0, 1.0, 0.0, -1.0, -1.0, 0.0, 1.0, -1.0, 0.0, 1.0, 1.0,
+        0.0,
     ];
 
     if width > height {
-
         // Divide y by aspect ratio
         vertices[1] /= aspect_ratio;
         vertices[4] /= aspect_ratio;
@@ -150,9 +144,7 @@ fn create_rectangle(width: f32, height: f32) -> Vec<f32> {
         vertices[10] /= aspect_ratio;
         vertices[13] /= aspect_ratio;
         vertices[16] /= aspect_ratio;
-
     } else if height > width {
-
         // Multiply x by aspect ratio
         vertices[0] *= aspect_ratio;
         vertices[3] *= aspect_ratio;
@@ -168,10 +160,25 @@ fn create_rectangle(width: f32, height: f32) -> Vec<f32> {
 fn create_entity(world: &mut specs::World, program: u32) {
     use component_system::components::*;
 
-    let vertices = create_rectangle(22.0, 26.0);
+    let vertices = create_rectangle(22.0, 28.0);
 
-    let texture_vertices: Vec<f32> =
-        vec![0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0];
+    // let texture_vertices: Vec<f32> =
+    //     vec![0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0];
+
+    let texture_vertices: Vec<Vec<f32>> = vec![
+        vec![
+            0.0, 0.0, 0.25, 1.0, 0.0, 1.0, 0.0, 0.0, 0.25, 0.0, 0.25, 1.0,
+        ],
+        vec![
+            0.25, 0.0, 0.5, 1.0, 0.25, 1.0, 0.25, 0.0, 0.5, 0.0, 0.5, 1.0,
+        ],
+        vec![
+            0.5, 0.0, 0.75, 1.0, 0.5, 1.0, 0.5, 0.0, 0.75, 0.0, 0.75, 1.0,
+        ],
+        vec![
+            0.75, 0.0, 1.0, 1.0, 0.75, 1.0, 0.75, 0.0, 1.0, 0.0, 1.0, 1.0,
+        ],
+    ];
 
     let texture = match image::open("./src/animations/ogre_idle_animation.png") {
         Ok(image) => image.flipv().into_rgba(),
@@ -204,7 +211,13 @@ fn create_entity(world: &mut specs::World, program: u32) {
         .with(Velocity::new())
         .with(Controlled)
         .with(Size::new(0.3, 0.3))
-        .with(Drawn::new(program, texture_id, vertices, texture_vertices))
+        .with(Drawn::new(
+            program,
+            texture_id,
+            vertices,
+            texture_vertices[0].clone()
+        ))
+        .with(Animate::new(0.2, texture_vertices))
         .build();
 }
 
@@ -310,5 +323,8 @@ fn main() {
 
         // Swap the buffers
         window.gl_swap_window();
+
+        let sleep_time = std::time::Duration::from_millis(5);
+        std::thread::sleep(sleep_time);
     }
 }
