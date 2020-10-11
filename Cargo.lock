@@ -570,7 +570,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rust-rouge"
+name = "rust-rogue"
 version = "0.1.0"
 dependencies = [
  "gl",
