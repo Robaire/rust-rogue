@@ -210,6 +210,7 @@ pub mod systems {
     use specs::prelude::*;
 
     /// Draws an entity to the screen
+    /// This is the only system that may make OpenGL function calls since OpenGL is not threadsafe.
     pub struct DrawSystem;
     impl<'a> System<'a> for DrawSystem {
         type SystemData = (
