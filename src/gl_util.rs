@@ -76,8 +76,8 @@ pub fn set_vertex_array_pointer(buffer: u32, id: u32, index: u32, size: i32) {
         gl::BindVertexArray(id);
         gl::BindBuffer(gl::ARRAY_BUFFER, buffer);
 
-        gl::VertexAttribPointer(index, size, gl::FLOAT, gl::FALSE, 0, std::ptr::null());
         gl::EnableVertexAttribArray(index);
+        gl::VertexAttribPointer(index, size, gl::FLOAT, gl::FALSE, 0, std::ptr::null());
 
         gl::BindVertexArray(0);
         gl::BindBuffer(gl::ARRAY_BUFFER, 0);
@@ -122,14 +122,26 @@ pub fn draw_triangles(vertex_count: u32) {
     unsafe { gl::DrawArrays(gl::TRIANGLES, 0, vertex_count as i32) }
 }
 
-/// Set the value of a uniform
+/// Set the value of a vec3 uniform
 /// # Arguments
 /// * `uniform` - The name of the uniform to copy data to
 /// * `program` - The shader program in use
 /// * `data` - Data to copy to the uniform
-pub fn set_uniform_float(uniform: &str, program: u32, data: &Vec<f32>) {
+pub fn set_uniform_float_vec3(uniform: &str, program: u32, data: &Vec<f32>) {
     unsafe {
         let location = gl::GetUniformLocation(program, CString::new(uniform).unwrap().as_ptr());
         gl::Uniform3fv(location, 1, data.as_ptr());
+    }
+}
+
+/// Set the value of a vec2 uniform
+/// # Arguments
+/// * `uniform` - The name of the uniform to copy data to
+/// * `program` - The shader program in use
+/// * `data` - Data to copy to the uniform
+pub fn set_uniform_float_vec2(uniform: &str, program: u32, data: &Vec<f32>) {
+    unsafe {
+        let location = gl::GetUniformLocation(program, CString::new(uniform).unwrap().as_ptr());
+        gl::Uniform2fv(location, 1, data.as_ptr());
     }
 }
