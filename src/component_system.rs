@@ -263,12 +263,11 @@ pub mod systems {
                     }
 
                     gl_util::set_vertex_array_pointer(
-                        animate.texture_coord_buffers[animate.layer as usize], 
-                        drawn.attribute_array, 
-                        1, 
+                        animate.texture_coord_buffers[animate.layer as usize],
+                        drawn.attribute_array,
+                        1,
                         2
                     );
-
                 }
             }
         }
