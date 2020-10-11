@@ -11,6 +11,7 @@ use shader::{Program, Shader};
 
 pub mod component_system;
 pub mod gl_util;
+pub mod map;
 
 extern crate specs;
 use specs::prelude::*;
@@ -162,9 +163,6 @@ fn create_entity(world: &mut specs::World, program: u32) {
 
     let vertices = create_rectangle(22.0, 28.0);
 
-    // let texture_vertices: Vec<f32> =
-    //     vec![0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0];
-
     let texture_vertices: Vec<Vec<f32>> = vec![
         vec![
             0.0, 0.0, 0.25, 1.0, 0.0, 1.0, 0.0, 0.0, 0.25, 0.0, 0.25, 1.0,
@@ -180,34 +178,12 @@ fn create_entity(world: &mut specs::World, program: u32) {
         ],
     ];
 
-    let texture = match image::open("./src/animations/ogre_idle_animation.png") {
-        Ok(image) => image.flipv().into_rgba(),
-        Err(message) => panic!(format!("Image could not be loaded: {}", message))
-    };
-
-    let texture_id = gl_util::generate_texture();
-    gl_util::bind_texture(texture_id);
-
-    unsafe {
-        gl::TexImage2D(
-            gl::TEXTURE_2D,
-            0,
-            gl::RGBA8 as i32,
-            88,
-            28,
-            0,
-            gl::RGBA,
-            gl::UNSIGNED_BYTE,
-            texture.as_ptr() as *const gl::types::GLvoid
-        );
-        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAG_FILTER, gl::NEAREST as i32);
-        gl::TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MIN_FILTER, gl::LINEAR as i32);
-    }
+    let texture_id = gl_util::create_texture_from_file("./src/animations/ogre_idle_animation.png");
 
     // Create an entity
     world
         .create_entity()
-        .with(Position::new_xyz(0.0, 0.0, 0.0))
+        .with(Position::new_xyz(0.0, 0.0, 0.5))
         .with(Velocity::new())
         .with(Controlled)
         .with(Size::new(0.3, 0.3))
@@ -232,6 +208,7 @@ fn main() {
     let shader_program = create_shader_program();
 
     // Add entities to the world
+    map::create_map_entities(&mut world, shader_program.id);
     create_entity(&mut world, shader_program.id);
 
     // Set the projection matrix
@@ -257,8 +234,8 @@ fn main() {
 
     // Last Bit
     unsafe {
-        gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
         gl::Enable(gl::BLEND);
+        gl::BlendFunc(gl::SRC_ALPHA, gl::ONE_MINUS_SRC_ALPHA);
 
         gl::Enable(gl::CULL_FACE);
 
