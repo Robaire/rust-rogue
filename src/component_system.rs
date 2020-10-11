@@ -228,6 +228,14 @@ pub mod systems {
                     gl::UseProgram(drawn.program);
                 }
 
+                // Update texture coordinate buffer
+                gl_util::set_vertex_array_pointer(
+                    drawn.texture_coord_buffer,
+                    drawn.attribute_array,
+                    1,
+                    2
+                );
+
                 gl_util::bind_array(drawn.attribute_array);
                 gl_util::bind_texture(drawn.texture_id);
 
@@ -246,12 +254,12 @@ pub mod systems {
     impl<'a> System<'a> for AnimateSystem {
         type SystemData = (
             WriteStorage<'a, Animate>,
-            ReadStorage<'a, Drawn>,
+            WriteStorage<'a, Drawn>,
             Read<'a, DeltaTime>
         );
 
-        fn run(&mut self, (mut animate, drawn, delta_time): Self::SystemData) {
-            for (animate, drawn) in (&mut animate, &drawn).join() {
+        fn run(&mut self, (mut animate, mut drawn, delta_time): Self::SystemData) {
+            for (animate, drawn) in (&mut animate, &mut drawn).join() {
                 animate.time_elapsed += delta_time.delta;
 
                 if animate.time_elapsed >= animate.speed {
@@ -262,12 +270,8 @@ pub mod systems {
                         animate.layer = 0;
                     }
 
-                    gl_util::set_vertex_array_pointer(
-                        animate.texture_coord_buffers[animate.layer as usize],
-                        drawn.attribute_array,
-                        1,
-                        2
-                    );
+                    drawn.texture_coord_buffer =
+                        animate.texture_coord_buffers[animate.layer as usize];
                 }
             }
         }
