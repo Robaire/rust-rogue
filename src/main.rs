@@ -126,18 +126,54 @@ fn create_shader_program() -> Program {
     return shader_program;
 }
 
+/// Creates a rectangle normalized to (-1, 1)
+fn create_rectangle(width: f32, height: f32) -> Vec<f32> {
+
+    let aspect_ratio = width / height;
+
+    // Start with the vertices arranged as a square
+    let mut vertices: Vec<f32> = vec![
+        -1.0, -1.0, 0.0, 
+        1.0, 1.0, 0.0, 
+        -1.0, 1.0, 0.0, 
+        -1.0, -1.0, 0.0, 
+        1.0, -1.0, 0.0, 
+        1.0, 1.0, 0.0,
+    ];
+
+    if width > height {
+
+        // Divide y by aspect ratio
+        vertices[1] /= aspect_ratio;
+        vertices[4] /= aspect_ratio;
+        vertices[7] /= aspect_ratio;
+        vertices[10] /= aspect_ratio;
+        vertices[13] /= aspect_ratio;
+        vertices[16] /= aspect_ratio;
+
+    } else if height > width {
+
+        // Multiply x by aspect ratio
+        vertices[0] *= aspect_ratio;
+        vertices[3] *= aspect_ratio;
+        vertices[6] *= aspect_ratio;
+        vertices[9] *= aspect_ratio;
+        vertices[12] *= aspect_ratio;
+        vertices[15] *= aspect_ratio;
+    }
+
+    return vertices;
+}
+
 fn create_entity(world: &mut specs::World, program: u32) {
     use component_system::components::*;
 
-    let vertices: Vec<f32> = vec![
-        -1.0, -1.0, 0.0, 1.0, 1.0, 0.0, -1.0, 1.0, 0.0, -1.0, -1.0, 0.0, 1.0, -1.0, 0.0, 1.0, 1.0,
-        0.0,
-    ];
+    let vertices = create_rectangle(22.0, 26.0);
 
     let texture_vertices: Vec<f32> =
         vec![0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 1.0];
 
-    let texture = match image::open("./src/frames/skull.png") {
+    let texture = match image::open("./src/animations/ogre_idle_animation.png") {
         Ok(image) => image.flipv().into_rgba(),
         Err(message) => panic!(format!("Image could not be loaded: {}", message))
     };
@@ -150,8 +186,8 @@ fn create_entity(world: &mut specs::World, program: u32) {
             gl::TEXTURE_2D,
             0,
             gl::RGBA8 as i32,
-            16,
-            16,
+            88,
+            28,
             0,
             gl::RGBA,
             gl::UNSIGNED_BYTE,
