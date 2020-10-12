@@ -20,7 +20,7 @@ use specs::WorldExt;
 use std::ffi::CString;
 
 extern crate nalgebra;
-use nalgebra::Orthographic3;
+use nalgebra::{Orthographic3, Matrix4};
 
 fn init_sdl() -> (sdl2::Sdl, sdl2::video::Window, sdl2::video::GLContext) {
     // Initialize SDL
@@ -219,8 +219,9 @@ fn main() {
         )
     };
 
+    let scale = Matrix4::new_scaling(1.0 / 2.0);
     let aspect = 1.0;
-    let projection = Orthographic3::new(-aspect, aspect, -1.0, 1.0, -1.0, 1.0);
+    let projection = Orthographic3::new(-aspect, aspect, -1.0, 1.0, -1.0, 1.0).to_homogeneous();
 
     // Write the projection to the gpu
     unsafe {
@@ -228,7 +229,7 @@ fn main() {
             projection_id,
             1,
             gl::FALSE,
-            projection.to_homogeneous().as_slice().as_ptr()
+            (projection * scale).as_slice().as_ptr()
         );
     };
 
@@ -264,7 +265,7 @@ fn main() {
 
                         // Compute the projection
                         let aspect = x as f32 / y as f32;
-                        let projection = Orthographic3::new(-aspect, aspect, -1.0, 1.0, -1.0, 1.0);
+                        let projection = Orthographic3::new(-aspect, aspect, -1.0, 1.0, -1.0, 1.0).to_homogeneous();
 
                         // Write the projection to the gpu
                         shader_program.set_used();
@@ -272,7 +273,7 @@ fn main() {
                             projection_id,
                             1,
                             gl::FALSE,
-                            projection.to_homogeneous().as_slice().as_ptr()
+                            (projection * scale).as_slice().as_ptr()
                         );
                     },
                     _ => {}
