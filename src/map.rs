@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 pub fn create_map_entities(world: &mut specs::World, program: u32) {
     use crate::component_system::components::*;
     use crate::gl_util;
@@ -112,4 +114,50 @@ fn create_rectangle(width: f32, height: f32) -> Vec<f32> {
     }
 
     return vertices;
+}
+
+pub fn read_map_string() {
+    let map = "
+    #########
+    #.......#
+    #.......#
+    #.......#
+    #########
+    ";
+
+}
+
+#[derive(PartialEq, Eq, Hash)]
+struct Coordinate {
+    x: i32,
+    y: i32,
+}
+
+enum TileType {
+    Floor,
+    Wall
+}
+
+struct Tile {
+    position: Coordinate,
+    tile_type: TileType
+}
+
+struct Map {
+    tiles: HashMap<Coordinate, Tile>
+}
+
+impl Map {
+    fn add_tile(&mut self, coordinate: Coordinate, tile: Tile) {
+        self.tiles.insert(coordinate, tile);
+    }
+
+    pub fn create_map(template: &str) -> Map {
+        let mut map = Map{ tiles: HashMap::new() };
+
+        
+
+
+        return map;
+    }
 }
